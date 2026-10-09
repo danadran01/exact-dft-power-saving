@@ -1,0 +1,613 @@
+% Grouped recursion and colour registers for the exact power-saving DFT.
+% Compile with XeLaTeX or tectonic:  tectonic -X compile paper.tex
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{booktabs,array,longtable}
+\usepackage{xcolor}
+\usepackage{fontspec}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+\setmonofont{DejaVuSansMono.ttf}[Scale=0.82]
+\setlength{\emergencystretch}{3em}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem*{citedtheorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\F}{\mathbb{F}_2}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\E}{\mathcal{E}}
+
+\title{Grouped recursion and colour registers:\\
+an improved exponent for the exact power-saving DFT}
+\author{Claude (Anthropic)}
+\date{October 8, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+OpenAI recently gave a deterministic algorithm that computes the discrete Fourier transform of every
+length $n$ exactly in $O\big(n(\log n)^{\theta}(\log\log n)^{4-\theta}\big)$ operations, with
+$1-\theta\approx2.1\cdot10^{-13}$, and a Lean formalization of a variant with $1-\theta=2\cdot10^{-11}$.
+Their method converts a saving for one finite binary ``network'' into a fast algorithm for the tensor
+powers $C^{\otimes k}$ of a $2\times2$ matrix, by a recursion that treats every directional factor of
+the network as a separate recursive call. We make two improvements. First, the \emph{grouped
+recursion}: all directional factors of one edge of the network form a single tensor power and can be
+run as one recursive call on a larger fibre. The exponent becomes the root of
+$\sum_e(\rho_e/m)^p=W^*$ instead of $\log_m(\sum_e\rho_e/W^*)$. Second, \emph{colour registers}: a new
+network in which most of the paper's side wires are replaced by a small number of shared registers.
+Together they give the exact DFT in
+\[
+  O\!\left(n\,(\log n)^{\,1-3.2\cdot10^{-6}}\right)
+\]
+operations (Theorem~\ref{thm:main}). The grouped recursion alone, applied to the network that OpenAI
+formalized, gives $O\big(n(\log n)^{1-10^{-8}}\big)$ (Theorem~\ref{thm:formal}). Both results have been
+formally verified in the proof assistant Lean~4, as an extension of OpenAI's formalization.
+\end{abstract}
+
+\tableofcontents
+
+%=====================================================================================================
+\section{Introduction}\label{sec:intro}
+
+\subsection{Background}
+For $n\ge1$ let $F_n=(\zeta_n^{jk})_{0\le j,k<n}$ with $\zeta_n=e^{2\pi i/n}$. The fast Fourier transform
+computes $F_nx$ in $O(n\log n)$ arithmetic operations at every length. OpenAI~\cite{oai} recently gave
+the first power saving in the logarithm, in a model of exact complex arithmetic with specified roots,
+unrestricted coefficients and unit-cost logarithmic-size indexing, in which all scalar preparation and
+array organization are charged:
+
+\begin{citedtheorem}[{OpenAI \cite[Theorem~1.1]{oai}}]
+There is a single deterministic algorithm which, for every $n\ge1$ and $x\in\C^n$, computes $F_nx$
+exactly in $O\big(n(\log n)^\theta(\log\log n)^{4-\theta}\big)$ operations, where
+$\theta=\log(10^6-\Delta/2^{71})/\log 10^6$ with $\Delta=6\,871\,402\,692\,000\,000$; thus
+$1-\theta\approx2.1\cdot10^{-13}$.
+\end{citedtheorem}
+
+The proof has three layers. A finite combinatorial object, a \emph{network} on $m$ binary coordinates
+with $W^*$ roles, yields an algorithm for the tensor powers $C^{\otimes k}$ of
+$C=\frac12\begin{psmallmatrix}1+i&1-i\\1-i&1+i\end{psmallmatrix}$ \cite[Theorem~2.6]{oai}. The
+exponent of that algorithm then propagates through a reduction of $F_n$ to such tensor powers
+\cite[Sections~3--5]{oai}. OpenAI also formalized the whole argument in Lean~4 \cite{oailean}, for a
+smaller explicit network, proving the internal exponent $1-2\cdot10^{-11}$.
+
+\subsection{Results}
+Our main result is the following. It has been formally verified (Section~\ref{sec:formal}).
+
+\begin{theorem}[Main Theorem]\label{thm:main}
+There is a single deterministic algorithm which, for every $n\ge1$ and $x\in\C^n$, computes $F_nx$
+exactly in the model of \cite{oai} in
+\[
+  O\!\left(n\,(\log n)^{q}\right),\qquad q=1-3.2\cdot10^{-6},
+\]
+operations. More precisely, the bound $O\big(n(\log n)^{z}(\log\log n)^{4-z}\big)$ holds with
+$z=1-3.21\cdot10^{-6}$; the exact root of the rate equation of the network is
+$1-p=3.2791\cdot10^{-6}$. The same holds for exact convolution of two length-$n$ sequences.
+\end{theorem}
+
+The grouped recursion alone, on the network formalized by OpenAI, already gives a substantial
+improvement over the exponent of \cite{oailean}. This secondary result has also been formally
+verified.
+
+\begin{theorem}[grouped recursion on OpenAI's formalized network]\label{thm:formal}
+In the RAM model and with the correctness specification of OpenAI's formalization \cite{oailean},
+there is a fixed pair of programs computing $F_nx$ exactly for every $n\ge1$ and $x\in\C^n$, with work
+\[
+  W(n)=O\!\left(n\,(\log n)^{1-10^{-8}}\right).
+\]
+The same holds for exact convolution.
+\end{theorem}
+
+\begin{remark}[formal verification]\label{rem:status}
+Theorems~\ref{thm:main} and~\ref{thm:formal} have been formally verified in Lean~4 with the Mathlib
+library, as an extension of OpenAI's formalization \cite{oailean}, using only the standard axioms and
+no unverified computation. The formal proof of Theorem~\ref{thm:main} certifies the rate inequality
+at $z=1-3.21\cdot10^{-6}$ and obtains the slightly stronger bound
+$O\big(n(\log n)^z(\log\log n)^2\big)$. See Section~\ref{sec:formal}.
+\end{remark}
+
+\begin{center}\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.0cm}>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{2.1cm}>{\raggedright\arraybackslash}p{3.6cm}@{}}
+\toprule
+source & network & recursion & exponent gap $1-q$\\
+\midrule
+\cite[Thm.~1.1]{oai} & $h=100$, $m=10^6$, $W^*=2^{71}$ & per direction & $2.1\cdot10^{-13}$\\
+OpenAI's formal proof \cite{oailean} & 32 coordinates per factor, $W^*=2^{50}$ & per direction & $2\cdot10^{-11}$\\
+Theorem~\ref{thm:formal} (formally verified) & the same & grouped & $10^{-8}$ (internal $1.4657\cdot10^{-8}$)\\
+Theorem~\ref{thm:main} (formally verified) & colour registers, $(30,20,41)$, $W^*=2^{43}$ & grouped & $3.2\cdot10^{-6}$ (internal $3.279\cdot10^{-6}$)\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Ideas}
+\paragraph{Grouped recursion.} In \cite{oai}, an edge of the network along which a role's label grows
+by $\rho$ binary dimensions costs $\rho$ \emph{directional kernels} $C_z$. Each of these is run as
+separate recursive calls on fibres of size $\lfloor k/m\rfloor$. The $\rho$ kernels of one edge act
+along an orthonormal, hence linearly independent, family of directions. After one change of
+coordinates their product is $C^{\otimes\rho}$ on $\rho$ coordinates (Lemma~\ref{lem:batch}). Hence the
+whole edge is one batch of recursive calls on fibres of size $\rho\lfloor k/m\rfloor$. The cost
+recurrence becomes $t(k)\le A+(W^*)^{-1}\sum_et(\rho_e\lfloor k/m\rfloor)$, with exponent the root $p$ of
+$\sum_e(\rho_e/m)^p=W^*$ (Theorem~\ref{thm:grouped}). This $p$ is never larger than the paper's
+exponent (Lemma~\ref{lem:ptheta}). It is much smaller when most of the total dimension sits in edges of
+size close to $m$, which is the case for these networks: on OpenAI's formalized network, grouping
+improves $1-\theta$ from $7.7\cdot10^{-11}$ to $1.47\cdot10^{-8}$.
+
+\paragraph{Colour registers.} The paper's network spends one auxiliary wire, a \emph{side wire},
+for every ordered pair of orthogonal triples, i.e.\ $\binom{h-3}3+3(h-3)$ wires per element (8550 at
+$h=41$). In our network each element owns a few \emph{registers}, which meet the registers of other
+elements at shared \emph{meeting labels}. A catalytic 12-step schedule realizes the required transfer
+matrix for arbitrary auxiliary contents. With searched register designs this costs about $73$
+auxiliary wires per element at $h=41$ (Section~\ref{sec:colour}).
+
+\subsection{Organization}
+Section~\ref{sec:prelim} recalls the model, labels, frames, networks and the reduction to tensor
+powers. Section~\ref{sec:grouped} proves the grouped tensor-power theorem. Section~\ref{sec:oainet}
+applies it to OpenAI's formalized network and proves Theorem~\ref{thm:formal}.
+Section~\ref{sec:colour} constructs the colour-register network, and Section~\ref{sec:proofmain}
+completes the proof of Theorem~\ref{thm:main}. Section~\ref{sec:formal} describes the formal
+verification, and Section~\ref{sec:summary} summarizes and lists open problems.
+
+%=====================================================================================================
+\section{Preliminaries}\label{sec:prelim}
+
+We use the notation of \cite{oai} throughout.
+
+\subsection{Model and reduction}
+The model of computation is that of \cite[Section~1]{oai}: exact complex registers with unit-cost
+field operations, rational constants and $i$, specified roots of unity as inputs, and unit-cost integer
+and address operations on words of $O(\log n)$ bits. All scalar preparation, table construction and
+index work are charged. In OpenAI's formalization \cite{oailean} this model is a first-order RAM
+language with an operation-count semantics. The reduction of the DFT to tensor
+powers is the following.
+
+\begin{proposition}[{\cite[Sections~3--5]{oai}}]\label{prop:reduction}
+Let $0<q\le1$. Suppose there is a deterministic exact algorithm applying $C^{\otimes k}$ to an arbitrary
+complex array of length $2^k$ in $O(2^k(k+1)^q)$ operations for every $k\ge0$, including fixed-table
+construction, scalar arithmetic, index preparation and data movement. Then $F_nx$ can be computed for
+every $n\ge1$ in $O\big(n(\log n)^q(\log\log n)^{4-q}\big)$ operations. The same holds for exact
+convolution.
+\end{proposition}
+
+Indeed, the proof of \cite[Theorem~1.1]{oai} uses \cite[Theorem~2.6]{oai} only through the bound
+$O(2^k(k+1)^\theta)$ with $0<\theta\le1$: in the sector estimate of \cite[Proposition~4.2]{oai} and in
+\cite[Section~5]{oai}. In the formalization \cite{oailean} the argument downstream of the tensor-power
+bound uses the exponent only through $0<q<1$, and proves the slightly stronger bound
+$O\big(n(\log n)^q(\log\log n)^2\big)$.
+
+\begin{corollary}\label{cor:reduction}
+Under the hypothesis of Proposition~\ref{prop:reduction}, $F_n$ costs $O(n(\log n)^{q'})$ for every
+$q'>q$.
+\end{corollary}
+\begin{proof}
+$(\log n)^q(\log\log n)^{4-q}=o\big((\log n)^{q'}\big)$.
+\end{proof}
+
+\subsection{Binary labels and frames}
+Let $\mathbb D=\F^m$ with the dot product $x\cdot y=\sum_ix_iy_i$. A subspace $U\le\mathbb D$ is
+\emph{nondegenerate} if the restricted form has zero radical. For nested nondegenerate $U\subseteq V$ the
+\emph{residual} is $V\cap U^\perp$. A family $z_1,\dots,z_\rho$ is \emph{orthonormal} if
+$z_j\cdot z_k=\delta_{jk}$; an orthonormal family is linearly independent, since its Gram matrix is the
+identity. For $z\in\mathbb D$ let $R_z$ be the translation $(R_zg)(x)=g(x+z)$ of functions
+$g:\mathbb D\to\C$. Let $a=\frac{1+i}2$, $b=\frac{1-i}2$, and let
+\[
+  C_z=aI+bR_z
+\]
+be the \emph{directional kernel} along $z$. For a coordinate vector $e_j$, $C_{e_j}$ is $C$ acting on
+coordinate $j$. For a nondegenerate $U$ the frame $\Phi_U$ is defined in \cite[(2.5)]{oai}; we use only
+the following property.
+
+\begin{lemma}[{\cite[Lemma~2.2]{oai}}]\label{lem:frames}
+Let $U\subseteq V$ be nested nondegenerate subspaces whose residual has an orthonormal basis
+$z_1,\dots,z_\rho$. Then $\Phi_V\Phi_U^{-1}=R_\tau\prod_{j=1}^\rho C_{z_j}$ for some $\tau\in\mathbb D$,
+and $\Phi_U\Phi_V^{-1}=R_{\tau'}\prod_jC_{z_j}$ for some $\tau'$.
+\end{lemma}
+
+(The statement in \cite{oai} speaks of $\rho$ factors $C_z^{\pm1}$; since $C_z^{-1}=R_zC_z$ and all $R_z$,
+$C_w$ commute, the translations collect into one $R_\tau$.)
+
+\subsection{Network certificates}
+We isolate the interface between a network and the recursion. Let $W^*\ge1$ and $f\ge1$, and consider
+$W^*$ complex arrays (\emph{roles}), each indexed by $(\F^m)^f$, i.e.\ by $f$ \emph{columns} of $m$ bits.
+A matrix acting on functions $\F^m\to\C$ acts on such an array by its $f$-fold tensor power.
+
+\begin{definition}[network certificate]\label{prop:interface}
+An \emph{$(m,W^*)$-certificate} is a finite word of moves of the following three kinds.
+\begin{enumerate}
+\item A \emph{gate} $g\in\Q^{W^*\times W^*}$: it replaces the roles $(x_r)_r$ by $(\sum_sg_{rs}x_s)_r$,
+  pointwise in the address.
+\item A \emph{translation} $(r,\tau)$: role $r$ is multiplied by $R_\tau$.
+\item An \emph{edge move} $(r,\tau,z_1,\dots,z_\rho)$ with $z_1,\dots,z_\rho$ orthonormal: role $r$ is
+  multiplied by $R_\tau\prod_{j=1}^\rho C_{z_j}$. Its \emph{size} is $\rho$.
+\end{enumerate}
+The word must act as $C^{\otimes mf}$ on every role, for every $f\ge1$ and arbitrary contents. Its
+\emph{edge multiset} $\E$ is the multiset of sizes of its edge moves.
+\end{definition}
+
+\begin{remark}\label{rem:fromnetworks}
+Every network of \cite[Section~2]{oai} gives a certificate. Its gates are the scalar gates. Its edge
+moves are the frame changes $\Phi_V\Phi_U^{-1}$ between consecutive labels of a role, by
+Lemma~\ref{lem:frames}, with the orthonormal basis of the residual. Its terminal corrections are
+translations and a signed permutation gate. This is \cite[Proposition~2.4]{oai} together with
+\cite[(2.6)]{oai}. A role that the network does not use (a \emph{padding role}) receives the path
+$0\to\langle e_1\rangle\to\mathbb D$, i.e.\ two edges of sizes $1$ and $m-1$. Its frame ratio is
+$\Phi_{\mathbb D}=C^{\otimes m}$.
+\end{remark}
+
+\begin{theorem}[{\cite[Theorem~2.6]{oai}}, per-direction recursion]\label{thm:perdirection}
+Given an $(m,W^*)$-certificate with $s=\sum_{e\in\E}\rho_e<W^*m$, the tensor power $C^{\otimes k}$ can be
+applied in $O(2^k(k+1)^\theta)$ operations, $\theta=\log_m(s/W^*)$.
+\end{theorem}
+
+The proof of \cite{oai} runs every factor $C_{z_j}$ of an edge move as $2^{k-f}$ copies of
+$C^{\otimes f}$ on fibres, $f=\lfloor k/m\rfloor$, grouped into $2^{k-f}/W^*$ recursive calls of the
+$W^*$-role algorithm. It thus obeys $t(k)\le A+\frac{s}{W^*}t(\lfloor k/m\rfloor)$ for
+$t(k)=T(k)/(W^*2^k)$.
+
+%=====================================================================================================
+\section{The grouped recursion}\label{sec:grouped}
+
+\subsection{One edge is one tensor power}
+For $M\in GL_m(\F)$ let $(P_Mg)(x)=g(M^{-1}x)$.
+
+\begin{lemma}[batch identity]\label{lem:batch}
+Let $z_1,\dots,z_\rho\in\F^m$ be linearly independent and let $M\in GL_m(\F)$ satisfy $Mz_j=e_j$
+($1\le j\le\rho$). Then
+\[
+  \prod_{j=1}^\rho C_{z_j}=P_M^{-1}\big(C^{\otimes\rho}\otimes I_{2^{m-\rho}}\big)P_M .
+\]
+On $f$ columns, with $M$ applied in every column, $\big(\prod_jC_{z_j}\big)^{\otimes f}$ is a fixed
+address permutation, followed by $2^{(m-\rho)f}$ independent copies of $C^{\otimes\rho f}$ on contiguous
+fibres, followed by the inverse permutation.
+\end{lemma}
+\begin{proof}
+$(P_MR_zP_M^{-1}g)(x)=(P_M^{-1}g)(M^{-1}x+z)=g(x+Mz)$, so $P_MR_zP_M^{-1}=R_{Mz}$ and
+$P_MC_zP_M^{-1}=C_{Mz}$. Hence $\prod_jC_{z_j}=P_M^{-1}\big(\prod_jC_{e_j}\big)P_M$, and
+$C_{e_j}=aI+bR_{e_j}$ is $C$ on coordinate $j$ tensored with the identity. For the second statement
+tensor over the $f$ columns, and order the addresses so that the $\rho f$ selected coordinates are the
+lowest ones.
+\end{proof}
+
+\begin{remark}
+If the $z_j$ are members $v_i$ ($i\in R$) of one orthonormal basis $v_1,\dots,v_m$ of $\F^m$, one may
+take $Mx=(v_i\cdot x)_i$, reordered so that the coordinates in $R$ come last. Then $M^{-1}y=\sum_iy_iv_i$
+by orthonormality.
+\end{remark}
+
+\begin{lemma}[batch addressing]\label{lem:address}
+Fix $m$ and $M\in GL_m(\F)$. On an array of length $2^{mf+r}$ indexed by $f$ columns and $r$ spectator
+bits, the permutation of Lemma~\ref{lem:batch} and its inverse can be applied in $O(2^{mf+r})$
+operations, with constants depending only on $m$.
+\end{lemma}
+\begin{proof}
+This is the proof of \cite[Lemma~2.5]{oai}, with ``$\rho$ selected output bits per column'' in place of
+one. Tabulate once, for every $m$-bit column digit $u$, the value $Mu$, split into its $\rho$ selected
+bits and its $m-\rho$ remaining bits; the table has $2^m=O(1)$ entries. Traverse the digit prefix tree
+of the address and add the two tabulated contributions per column, shifted to their output positions:
+$O(1)$ work per node and fewer than $2^{mf+r+1}$ nodes. For the inverse, exchange source and
+destination.
+\end{proof}
+
+\begin{remark}
+The RAM model of \cite{oailean} stores the $f$ bits of each coordinate as one word (transposed
+digits). There the address map is computed coordinatewise as XOR-folds of words, in constant work per
+address.
+\end{remark}
+
+\subsection{The grouped work function}
+\begin{definition}[grouped work function]\label{def:gallot}
+Let $m\ge3$ and $a\ge0$ be integers and $N:\{0,\dots,m-1\}\to\N$. Define $G:\N\to\N$ by
+\[
+  G(k)=
+  \begin{cases}
+  2^k+\displaystyle\sum_{c=0}^{m-1}N(c)\,2^{\,k-c\lfloor k/m\rfloor-a}\,G\big(c\lfloor k/m\rfloor\big)
+    & \text{if }k\ge m(a+1),\\[1ex]
+  2^k&\text{otherwise.}
+  \end{cases}
+\]
+\end{definition}
+
+This is well defined: for $k\ge m(a+1)$ and $c<m$, $c\lfloor k/m\rfloor\le(m-1)\lfloor k/m\rfloor<k$.
+Moreover $k-c\lfloor k/m\rfloor\ge\lfloor k/m\rfloor\ge a+1$, so the exponent $k-c\lfloor k/m\rfloor-a$ is
+a positive integer and
+\begin{equation}\label{eq:rounds}
+  2^{\,k-c\lfloor k/m\rfloor-a}\cdot2^a\cdot2^{\,c\lfloor k/m\rfloor}=2^k .
+\end{equation}
+
+\begin{lemma}[supersolution]\label{lem:supersolution}
+In Definition~\ref{def:gallot} suppose $N(0)=0$, and let $z\ge0$ satisfy
+\[
+  \Sigma:=\sum_{c=1}^{m-1}N(c)\Big(\frac cm\Big)^z<2^a .
+\]
+Then $G(k)\le K\,2^k(k+1)^z$ for all $k\ge0$, where $K=1+2^a/(2^a-\Sigma)$.
+\end{lemma}
+\begin{proof}
+We show $G(k)\le K2^kk^z$ for $k\ge1$ by strong induction. If $k<m(a+1)$ then
+$G(k)=2^k\le K2^kk^z$, since $K\ge1$ and $k^z\ge1$. Otherwise let $f=\lfloor k/m\rfloor\ge1$. For
+$1\le c<m$ the child $cf$ satisfies $1\le cf<k$ and $(cf)^z\le(ck/m)^z=(c/m)^zk^z$. By induction and
+\eqref{eq:rounds},
+\[
+  G(k)\le2^k+\sum_{c\ge1}N(c)\,2^{k-a}\,K\Big(\frac cm\Big)^zk^z
+  =2^k\Big(1+K\frac{\Sigma}{2^a}k^z\Big)\le K2^kk^z ,
+\]
+where the last step uses $K(1-\Sigma/2^a)=(1-\Sigma/2^a)+1\ge1$ and $k^z\ge1$. Finally
+$G(0)=1\le K$, and $k^z\le(k+1)^z$.
+\end{proof}
+
+\subsection{The grouped tensor-power theorem}
+\begin{theorem}[grouped tensor-power theorem]\label{thm:grouped}
+Let an $(m,W^*)$-certificate be given with $m\ge3$, $W^*=2^a$, and edge multiset $\E$ with
+$1\le\rho\le m-1$ for all $\rho\in\E$. Let $z\in[0,1]$ satisfy
+\begin{equation}\label{eq:rate}
+  \sum_{\rho\in\E}\Big(\frac\rho m\Big)^z<W^* .
+\end{equation}
+Then there is a deterministic exact algorithm applying $C^{\otimes k}$ to an arbitrary complex array of
+length $2^k$ in $O\big(2^k(k+1)^z\big)$ operations, for every $k\ge0$, in the model of
+Proposition~\ref{prop:reduction}.
+\end{theorem}
+\begin{proof}
+We describe an algorithm $\mathcal A$ that transforms $W^*$ arrays of length $2^k$ simultaneously. One
+array is handled by zero-filling the other $W^*-1$.
+
+\emph{Base range.} If $k<K_0:=m(a+1)$, apply the $k$ factors of $C$ one at a time along their fibres,
+in $O(W^*k2^k)=O(W^*2^k)$ operations, since $K_0$ is a constant.
+
+\emph{Recursive step.} If $k\ge K_0$, write $k=mf+r$ with $f=\lfloor k/m\rfloor\ge a+1$ and
+$0\le r<m$. Apply the $r$ leftover factors of $C$ directly, then execute the certificate on $f$ columns
+with $r$ spectator bits. Gates and translations are pointwise and cost $O(W^*2^k)$ in total. An edge
+move $(r,\tau,z_1,\dots,z_\rho)$ is executed by Lemma~\ref{lem:batch} and Lemma~\ref{lem:address}:
+\begin{itemize}
+\item permute the addresses of role $r$;
+\item apply $C^{\otimes\rho f}$ to each of the $2^{k-\rho f}$ contiguous fibres;
+\item permute back and translate by $\tau$.
+\end{itemize}
+Since $\rho\le m-1$, $k-\rho f\ge f\ge a$, so the fibres split into exactly $2^{k-\rho f-a}$ groups of
+$W^*$. Each group is transformed by one recursive call of $\mathcal A$ at size $\rho f<k$. Correctness
+follows from the certificate identity for $f$ columns, which holds for arbitrary contents of every
+role, and from the correctness of the recursive calls.
+
+\emph{Cost.} Everything except the recursive calls costs at most $A\cdot W^*2^k$ for a constant $A$,
+as in \cite[Theorem~2.6]{oai}. With $N(c)$ the number of edge moves of size $c$ and $T(k)$ the cost of
+$\mathcal A$, we get $T(k)\le AW^*2^k+\sum_cN(c)2^{k-cf-a}T(cf)$. By induction
+$T(k)\le A'W^*G(k)$ with $G$ as in Definition~\ref{def:gallot}, and Lemma~\ref{lem:supersolution}
+gives $T(k)=O(W^*2^k(k+1)^z)$.
+
+\emph{Depth and workspace.} Along every recursion path
+$k'=\rho\lfloor k/m\rfloor\le k-\lfloor k/m\rfloor\le k-1$. So consecutive array lengths at least halve,
+and the workspace is $O(W^*2^k)$ as in \cite{oai}. The depth is
+$O(\log(k/K_0)/\log\frac m{m-1})=O(\log k)$, so stacks and counters fit in $O(\log n)$-bit words.
+\end{proof}
+
+\begin{corollary}\label{cor:grouped}
+Under the hypotheses of Theorem~\ref{thm:grouped} with $0<z\le1$, $F_n$ and exact convolution cost
+$O\big(n(\log n)^z(\log\log n)^{4-z}\big)$, and hence $O(n(\log n)^{q})$ for every $q>z$.
+\end{corollary}
+\begin{proof}
+Proposition~\ref{prop:reduction} and Corollary~\ref{cor:reduction}.
+\end{proof}
+
+\begin{lemma}[grouping never hurts]\label{lem:ptheta}
+Let $\E$ be as in Theorem~\ref{thm:grouped}, with $s=\sum_\rho\rho<W^*m$ and $|\E|>W^*$. Then
+$F(z)=\sum_\rho(\rho/m)^z$ is continuous and strictly decreasing on $[0,1]$, with $F(0)>W^*>F(1)$.
+Its unique root $p$ of $F(p)=W^*$ satisfies $p\le\theta=\log_m(s/W^*)$.
+\end{lemma}
+\begin{proof}
+Each $0<\rho/m<1$. We have $F(0)=|\E|>W^*$ and $F(1)=s/m<W^*$. For $\rho\ge1$, $\rho^\theta\le\rho$, so
+$F(\theta)\le m^{-\theta}s=W^*=F(p)$, and monotonicity gives $p\le\theta$.
+\end{proof}
+
+\begin{remark}[size of the gain]\label{rem:gain}
+For $z=1-\varepsilon$ close to $1$, $(\rho/m)^{z}\approx(\rho/m)(1+\varepsilon\ln(m/\rho))$. Writing
+$\Delta=W^*m-s$ for the saving,
+\[
+  1-\theta\approx\frac{\Delta}{W^*m\ln m},\qquad
+  1-p\approx\frac{\Delta/m}{\sum_\rho\frac\rho m\ln\frac m\rho}.
+\]
+So $(1-p)/(1-\theta)$ is about $\ln m$ divided by the $\rho$-weighted mean of $\ln(m/\rho)$. It is large
+when most of $s$ sits in edges of size close to $m$.
+\end{remark}
+
+\subsection{Certifying the rate inequality}
+\begin{lemma}[exponent certificate]\label{lem:certificate}
+Let $m\ge2$, $L\ge\ln m$, $0<\varepsilon<1/L$ and $\mu=1/(1-\varepsilon L)$. For each $1\le c\le m$ let
+$\ell_c\ge\ln(m/c)$. Then
+\[
+  \Big(\frac cm\Big)^{1-\varepsilon}\le\frac cm\big(1+\varepsilon\mu\ell_c\big).
+\]
+Consequently \eqref{eq:rate} holds for $z=1-\varepsilon$ whenever
+$\sum_\rho\frac\rho m(1+\varepsilon\mu\ell_\rho)<W^*$, a finite inequality between rationals when
+$\varepsilon$, $L$ and the $\ell_\rho$ are rational.
+\end{lemma}
+\begin{proof}
+Put $y=\varepsilon\ln(m/c)\in[0,\varepsilon L]$. Then $(c/m)^{-\varepsilon}=e^y\le1/(1-y)=1+y/(1-y)\le
+1+y/(1-\varepsilon L)\le1+\varepsilon\mu\ell_c$.
+\end{proof}
+
+\begin{remark}
+Upper bounds $\ell_c$ are obtained from $\ln2<0.6931471808$ together with $\ln y\le y-1$, or from
+partial sums of the series of $\ln$.
+\end{remark}
+
+%=====================================================================================================
+\section{OpenAI's formalized network}\label{sec:oainet}
+
+OpenAI's formalization \cite{oailean} does not use the network of \cite[Section~2]{oai}. It uses a
+smaller explicit one:
+\begin{itemize}
+\item three factors of $32$ binary coordinates each, so $m=32^3=32768$;
+\item the $v=\binom{30}3=4060$ triples on $30$ of the coordinates of each factor;
+\item $33$ centres;
+\item one side wire for every ordered pair of triples;
+\item $W^*=2^{50}$ roles.
+\end{itemize}
+Its certificate has $2^{50}m-\Delta$ directional moves with $\Delta=29\,406\,742\,400$,
+and the formalization proves the per-direction exponent $1-2\cdot10^{-11}$ (the true value of
+$1-\theta$ is $7.666\cdot10^{-11}$).
+
+\begin{proposition}[grouped certificate]\label{prop:oaicert}
+OpenAI's formalized network yields a $(32768,2^{50})$-certificate whose edge multiset is given by
+Table~\ref{tab:hist}. All sizes lie in $[1,m-1]$, and $\sum_\rho\rho=2^{50}m-\Delta$ with the same
+$\Delta=29\,406\,742\,400$.
+\end{proposition}
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{@{}rlr@{}}
+\toprule
+size $c$ & multiplicity $N(c)$ & value\\
+\midrule
+1 & $4\cdot4060^2\,n_b+3\cdot4060^2\,n_u+(2^{50}-W)$ & $1.3269\cdot10^{15}$\\
+30 & $3\cdot4060^2\,n_b$ & $6.0352\cdot10^{14}$\\
+31 & $6\cdot4060^3+4060^2\,n_b$ & $2.0157\cdot10^{14}$\\
+32 & $9\cdot33\cdot4060^2$ & $4.8956\cdot10^{9}$\\
+961 & $2\cdot4060^3$ & $1.3385\cdot10^{11}$\\
+962 & $4060^2\,n_b$ & $2.0117\cdot10^{14}$\\
+992 & $33\cdot4060^2$ & $5.4396\cdot10^{8}$\\
+1023 & $4060^2\,n_b$ & $2.0117\cdot10^{14}$\\
+31713 & $2\cdot4060^3$ & $1.3385\cdot10^{11}$\\
+31714 & $4060^2\,n_b$ & $2.0117\cdot10^{14}$\\
+31744 & $4060^2\,n_b+33\cdot4060^2$ & $2.0117\cdot10^{14}$\\
+32736 & $4060^2\,n_b+66\cdot4060^2$ & $2.0117\cdot10^{14}$\\
+32767 & $3\cdot4060^2\,n_u+(2^{50}-W)$ & $5.2225\cdot10^{14}$\\
+\bottomrule
+\end{tabular}
+\caption{Edge multiset of OpenAI's formalized network under grouping. Notation: $4060^2$ is the number
+of invocations per stage; $n_b=4060\cdot3006$ and $n_u=4060\cdot1054$ are the numbers of used
+(neighbouring) and unused side pairs per invocation; $33$ is the number of centres;
+$W=2\cdot4060^3+3\cdot4060^2(4060^2+33)$ is the number of network roles. The $2^{50}-W$ padding roles
+contribute one edge of size $1$ and one of size $m-1$ each. In total $|\E|=3.66\cdot10^{15}$.}
+\label{tab:hist}
+\end{table}
+
+\begin{proof}
+Every label of the formalized network is a subset of a fixed orthonormal basis of its role, and
+consecutive labels of a role differ by adding or removing a set of basis lines. Grouping each such
+change into one edge move (Lemma~\ref{lem:batch} with $M$ as in the remark after it) gives a certificate.
+Gates, scalar identities and terminal corrections are those of \cite{oailean}. There are two places
+where a role passes from the empty label to the full one in one step: the unused side wires at the
+end of a stage, and the padding roles. There the change is routed through an intermediate label of
+dimension $1$, giving sizes $1$ and $m-1$. The multiplicities follow from the cardinalities of the
+labels of \cite{oailean}. The bookkeeping is routine; it is part of the formal verification
+(Section~\ref{sec:formal}). The value of $\sum\rho$ follows from the table.
+\end{proof}
+
+\begin{proposition}[rate]\label{prop:oairate}
+For $\varepsilon=1.4657\cdot10^{-8}$, $\sum_cN(c)(c/m)^{1-\varepsilon}<2^{50}$.
+\end{proposition}
+\begin{proof}
+Apply Lemma~\ref{lem:certificate} with $L=16>\ln m=15\ln2$ and
+$\ell_c=j_c\cdot0.6931471808+(m/(2^{j_c}c)-1)$, where $2^{j_c}\le m/c<2^{j_c+1}$. The resulting
+rational inequality has $13$ terms and is verified exactly; this is part of the formal verification
+(Section~\ref{sec:formal}). The exact root
+of $F(p)=2^{50}$ is $1-p=1.4710\cdot10^{-8}$.
+\end{proof}
+
+\begin{proof}[Proof of Theorem~\ref{thm:formal}]
+By Propositions~\ref{prop:oaicert} and~\ref{prop:oairate}, Theorem~\ref{thm:grouped} applies with
+$z=1-1.4657\cdot10^{-8}$. Corollary~\ref{cor:grouped} with $q=1-10^{-8}>z$ gives the bound. The
+formal proof follows exactly this route (Section~\ref{sec:formal}).
+\end{proof}
+
+%=====================================================================================================
+\input{sec_colour.tex}
+
+%=====================================================================================================
+\section{Proof of the Main Theorem}\label{sec:proofmain}
+\begin{proof}[Proof of Theorem~\ref{thm:main}]
+By Theorem~\ref{col:thm:main}, the padded colour-register network with factor sizes $(30,20,41)$ and
+the designs of Proposition~\ref{col:prop:designs} is a $(24600,2^{43})$-certificate whose edge sizes
+lie in $[1,24599]$ and which satisfies \eqref{eq:rate} for $z=1-3.21\cdot10^{-6}$.
+Theorem~\ref{thm:grouped} gives $C^{\otimes k}$ in $O(2^k(k+1)^z)$, Proposition~\ref{prop:reduction}
+gives $O\big(n(\log n)^z(\log\log n)^{4-z}\big)$, and Corollary~\ref{cor:reduction} with
+$q=1-3.2\cdot10^{-6}>z$ gives $O(n(\log n)^q)$.
+\end{proof}
+
+%=====================================================================================================
+\section{Formal verification}\label{sec:formal}
+
+Theorem~\ref{thm:main} and Theorem~\ref{thm:formal} have been formally verified in the proof assistant
+Lean~4 with the Mathlib library. The formal proof extends OpenAI's published Lean formalization
+\cite{oailean} of \cite{oai}.
+
+The formal statement is phrased in OpenAI's formal RAM model, with its operation-count semantics. It
+asserts that there exist a program computing the root order $D$ from $n$ and a program computing
+$F_nx$ exactly, for every $n\ge1$ and $x\in\C^n$, whose total work $W(n)$ satisfies OpenAI's original
+bounds and
+\[
+  W(n)=O\!\left(n\,(\log n)^{1-3.2\cdot10^{-6}}\right),
+\]
+and whose integers, addresses and storage are polynomially bounded. The formal version of
+Theorem~\ref{thm:formal} is the same statement with the exponent $1-10^{-8}$. Both statements are
+also verified in their analogues for exact convolution.
+
+The proof uses only the standard axioms of Lean's foundations (propositional extensionality, the axiom
+of choice and the soundness of quotients) and no unverified computation. In particular, the finite
+design data of Proposition~\ref{col:prop:designs}, about $1.04\cdot10^8$ ordered pairs, are checked by
+the Lean kernel itself (Remark~\ref{col:rem:designs}).
+
+OpenAI's definitions of the machine model and of correctness are used unchanged, and so is the rest
+of their formal proof, in particular the reduction of Proposition~\ref{prop:reduction}, which the
+kernel re-checks. Only three of OpenAI's files were modified, at the interface between the network and
+the recursion, where the per-direction recursion is replaced by the grouped one. The new material
+consists of the grouped recursion of Section~\ref{sec:grouped}, the colour-register network of
+Section~\ref{sec:colour}, the designs, and the exponent inequality.
+
+The formal proof differs from the written one in two respects. First, it certifies the rate
+inequality \eqref{eq:rate} at $z=1-3.21\cdot10^{-6}$, through the bound of
+Proposition~\ref{col:prop:exponent}(d), and not near the exact root $1-p=3.2791\cdot10^{-6}$.
+Second, it obtains the slightly stronger bound $O\big(n(\log n)^z(\log\log n)^2\big)$, which implies
+Theorem~\ref{thm:main} by Corollary~\ref{cor:reduction}.
+
+What must be trusted is the Lean kernel, and the claim that OpenAI's formal model faithfully
+expresses exact computation and its cost. The formal development is available from the author.
+
+%=====================================================================================================
+\section{Summary and outlook}\label{sec:summary}
+
+We improved the exponent of OpenAI's exact power-saving DFT in two independent ways.
+\begin{enumerate}
+\item The \emph{grouped recursion} (Theorem~\ref{thm:grouped}) runs each edge of a network as one tensor
+  power. It replaces $\log_m(\sum\rho_e/W^*)$ by the root of $\sum_e(\rho_e/m)^p=W^*$, never worse and
+  typically much better. On OpenAI's formalized network it gives the bound
+  $O\big(n(\log n)^{1-10^{-8}}\big)$ (Theorem~\ref{thm:formal}), against the previously formalized
+  $1-2\cdot10^{-11}$.
+\item \emph{Colour registers} (Section~\ref{sec:colour}) replace the side wires of the paper's network
+  by shared registers meeting at common labels. Combined with the grouped recursion they give
+  $O\big(n(\log n)^{1-3.2\cdot10^{-6}}\big)$ (Theorem~\ref{thm:main}), seven orders of magnitude beyond
+  the original gap of $2.1\cdot10^{-13}$.
+\end{enumerate}
+Both results have been formally verified (Section~\ref{sec:formal}).
+
+\paragraph{Open problems.}
+\begin{itemize}
+\item \emph{Better register designs.} The searched coordinate designs are about three times above a
+  simple counting lower bound. Designs in which each element needs $O(1)$ registers (``flag-meeting''
+  designs) would roughly triple $1-p$. We do not know whether they exist.
+\item \emph{Lorentzian families.} Replacing triples by the Lorentzian vector families of our earlier
+  analysis gives $1-p\ge2.479\cdot10^{-7}$ with side wires. Combining them with colour registers
+  requires meeting labels for pair-type vectors, which we have not constructed.
+\item \emph{Limits of the method.} Within the 12-step register pattern, the stage-2 auxiliaries
+  dominate the cost, because their labels must contain $B\otimes D_2$. A different invocation pattern
+  would be needed to go substantially further.
+\end{itemize}
+
+%=====================================================================================================
+\section*{Acknowledgements}
+This work builds on OpenAI's paper and on their open Lean formalization.
+
+\begin{thebibliography}{9}
+\bibitem{oai} OpenAI, \emph{An explicit power saving for the exact discrete Fourier transform},
+  September 2026.
+\bibitem{oailean} OpenAI, \emph{Lean formalization of} \cite{oai}, \url{https://github.com/openai/math}.
+\end{thebibliography}
+\end{document}

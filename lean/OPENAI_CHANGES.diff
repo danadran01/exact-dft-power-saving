@@ -1,0 +1,167 @@
+--- TensorSaving.lean
++++ TensorSaving.lean (fork)
+@@ -1 +1,3 @@
++import OAI.Computability.FourierTransform.Grouped.GSaving
++import OAI.Computability.FourierTransform.Colour.Final
+ import OAI.Computability.FourierTransform.RecursionBounds
+@@ -80,33 +82,7 @@
+ 
+-def alpha : ℝ := 1-2/(10:ℝ)^11
++/-- MODIFIED (colour-register network + grouped recursion): the certified exponent. -/
++def alpha : ℝ := Colour.Expo.zC
+ 
+-theorem alpha_pos : 0<alpha := by norm_num [alpha]
+-theorem alpha_lt : alpha < 1 := by norm_num [alpha]
+-
+-open Cluster
+-
+-lemma network_rate : (nMoves:ℝ)/(2:ℝ)^50 < (mcol:ℝ)^alpha := by
+-  let h : ℝ := 2/(10:ℝ)^11
+-  let M : ℝ := (mcol:ℝ)
+-  change _ < M^alpha
+-  have hm : 0<M := by norm_num [M,mcol]
+-  have he : Real.log M ≤ 16 := by
+-    rw [show M = (2:ℝ)^(15:ℕ) from (by norm_num [M,mcol]), Real.log_pow]
+-    have hh := Real.log_le_sub_one_of_pos (show (0:ℝ)<2 by norm_num)
+-    norm_num at *
+-    linarith
+-  have ht : M^alpha = M*Real.exp (-(Real.log M)*h) := by
+-    rw [Real.rpow_def_of_pos hm]
+-    unfold alpha
+-    change Real.exp (Real.log M * (1-h))=_
+-    rw [show Real.log M*(1-h)=Real.log M + -(Real.log M)*h from by ring, Real.exp_add,Real.exp_log hm]
+-  rw [ht]
+-  calc
+-    _ < M*(1-16*h) := by
+-      norm_num [nMoves, tower, bankSave, mcol, M, h]
+-    _ ≤ M*((-(Real.log M)*h)+1) := by
+-      apply mul_le_mul_of_nonneg_left _ hm.le
+-      dsimp only [h]
+-      linarith
+-    _ ≤ _ := by gcongr; apply Real.add_one_le_exp
++theorem alpha_pos : 0<alpha := by norm_num [alpha,Colour.Expo.zC]
++theorem alpha_lt : alpha < 1 := by norm_num [alpha,Colour.Expo.zC]
+ 
+@@ -134,5 +110,10 @@
+ 
+-lemma total_hills : ∃ c : ℕ, ∀ k : ℕ,
+-    RAM.allot mcol 50 nMoves k + 1 ≤ c*(2^k*hills k + 1) := by
+-  obtain ⟨C,hC,h⟩ := RAM.allot_bound mcol 50 nMoves (by norm_num [mcol]) alpha alpha_pos.le network_rate
++/-- MODIFIED: from the grouped work bound, generic in the batch histogram `N`. -/
++lemma total_hills (N : ℕ → ℕ) (hN0 : N 0 = 0)
++    (hN : ∑ c : Fin 24600, (N c : ℝ) * ((c:ℝ)/24600)^alpha < (2:ℝ)^43) :
++    ∃ c : ℕ, ∀ k : ℕ, RAM.gallot 24600 43 N k + 1 ≤ c*(2^k*hills k + 1) := by
++  have hu : ((24600:ℕ):ℝ) = 24600 := by norm_num
++  have hN' : ∑ c : Fin 24600, (N c : ℝ) * ((c:ℝ)/((24600:ℕ):ℝ))^alpha < (2:ℝ)^43 := by
++    rw [hu]; exact hN
++  obtain ⟨C,hC,h⟩ := RAM.gallot_bound 24600 43 N (by norm_num) hN0 alpha alpha_pos.le hN'
+   obtain ⟨c,hc⟩ := exists_nat_ge C
+@@ -141,3 +122,3 @@
+   specialize h k
+-  have hg : (RAM.allot mcol 50 nMoves k : ℝ) ≤ c*((2:ℝ)^k*(hills k:ℝ)) := by
++  have hg : (RAM.gallot 24600 43 N k : ℝ) ≤ c*((2:ℝ)^k*(hills k:ℝ)) := by
+     rw [← mul_assoc]
+@@ -146,3 +127,3 @@
+     gcongr
+-  have he : RAM.allot mcol 50 nMoves k ≤ c*(2^k*hills k) := by exact_mod_cast hg
++  have he : RAM.gallot 24600 43 N k ≤ c*(2^k*hills k) := by exact_mod_cast hg
+   rw [mul_add,mul_one]
+
+--- TensorProgram.lean
++++ TensorProgram.lean (fork)
+@@ -1 +1,3 @@
++import OAI.Computability.FourierTransform.Grouped.GRecursion
++import OAI.Computability.FourierTransform.Colour.Final
+ import OAI.Computability.FourierTransform.TensorSaving
+@@ -10,5 +12,6 @@
+ 
++/-- MODIFIED: colour-register certificate + grouped recursion. -/
+ theorem hills_all (cl : Paint) (m : Bool) {ι : Type U} (k : ι→ℕ)
+-    (v : ∀ i, Sim Role (k i)→ℂ) :
+-    let R := Layout.someLayout Role
++    (v : ∀ i, Sim Colour.RoleF (k i)→ℂ) :
++    let R := Layout.someLayout Colour.RoleF
+     Can m (fun i => 2^k i) (simIn cl) (bundle cl) (fun i => loaded cl R (k i) (v i))
+@@ -17,9 +20,12 @@
+   intro R
+-  let X := Layout.someLayout Blocks
+-  have hr : R.n=2^50 := R.card.symm.trans card_role
+-  have hx : X.n=mcol := X.card.symm.trans card_block
+-  obtain ⟨p,hp,hw⟩ := certificate
+-  have h := recurse_run cl m X R mcol 50 hx (by norm_num [mcol]) hr p hw k v
+-  rw [hp] at h
+-  obtain ⟨c,hc⟩ := total_hills
++  let X := Layout.someLayout Colour.BlocksF
++  have hr : R.n=2^43 := R.card.symm.trans Colour.card_roleF
++  have hx : X.n=24600 := X.card.symm.trans Colour.card_blocksF
++  obtain ⟨p,hs,hphi,hw⟩ := Colour.fcertificate
++  have h := grecurse_run cl m X R 24600 43 hx (by norm_num) hr p hs hw k v
++  have hN0 : (fun c => (sizes p).count c) 0 = 0 := by
++    simp only
++    rw [List.count_eq_zero]
++    intro h0; exact absurd (hs 0 h0).1 (by norm_num)
++  obtain ⟨c,hc⟩ := total_hills (fun c => (sizes p).count c) hN0 hphi
+   exact h.weaken ⟨c,fun i => hc (k i)⟩
+@@ -99,7 +105,7 @@
+       (fun i => 2^k i*hills (k i)) := by
+-  have ht := hills_all cl m k (fun i (j : Sim Role (k i)) => v i j.2)
+-  have H : Nonempty Role :=
+-    Fintype.card_pos_iff.mp (by rw [card_role]; unfold tower; positivity)
++  have ht := hills_all cl m k (fun i (j : Sim Colour.RoleF (k i)) => v i j.2)
++  have H : Nonempty Colour.RoleF :=
++    Fintype.card_pos_iff.mp (by rw [Colour.card_roleF]; positivity)
+   obtain ⟨l⟩ := H
+-  exact hills_project cl m k v (Layout.someLayout Role) l ht
++  exact hills_project cl m k v (Layout.someLayout Colour.RoleF) l ht
+ 
+
+--- Main.lean
++++ Main.lean (fork)
+@@ -39,4 +39,4 @@
+ lemma alpha_theta : alpha < theta := by
+-  let d : ℝ := 2/(10:ℝ)^11
+-  have hp : 0<d := by dsimp [d]; norm_num
++  let d : ℝ := Colour.Expo.epsC
++  have hp : 0<d := by dsimp [d]; norm_num [Colour.Expo.epsC,Colour.Expo.zC]
+   have hm : 2 ≤ paperM := by norm_num [paperM]
+@@ -50,3 +50,3 @@
+   have H : paperM/paperMultiplier-1 < d*(2/3) := by
+-    norm_num [d,paperM,paperMultiplier,paperW,paperDelta]
++    norm_num [d,Colour.Expo.epsC,Colour.Expo.zC,paperM,paperMultiplier,paperW,paperDelta]
+   rw [theta,lt_div_iff₀ hh]
+@@ -59,3 +59,3 @@
+ lemma decimal_range : alpha < decimalExponent ∧ decimalExponent < 1 := by
+-  norm_num [decimalExponent,alpha]
++  norm_num [decimalExponent,alpha,Colour.Expo.epsC,Colour.Expo.zC]
+ 
+@@ -144,2 +144,29 @@
+ 
++/-! ## Improvement (new; not part of OpenAI's development)
++Grouped recursion: every edge of a role's frame path is ONE batch (one recursive call of size
++|edge|·⌊k/u⌋). The internal exponent is `alpha` (TensorSaving), hence `W = O(n (log n)^q)` with
++q = 1 - 3.2·10⁻⁶. -/
++def improvedExponent : ℝ := 1 - 32/(10:ℝ)^7
++def improvedTime (n : ℕ) : ℝ := (n:ℝ) * (Real.log (n:ℝ)) ^ improvedExponent
++
++def ImprovedGoal : Prop := ∃ order solve W, DFTProgram order solve W ∧ TimeBounds W ∧
++  (fun n => (W n : ℝ)) =O[atTop] improvedTime
++def ImprovedConvGoal : Prop := ∃ order solve W, ConvProgram order solve W ∧ TimeBounds W ∧
++  (fun n => (W n : ℝ)) =O[atTop] improvedTime
++
++lemma alpha_improved : alpha < improvedExponent := by
++  norm_num [alpha,improvedExponent,Colour.Expo.epsC,Colour.Expo.zC]
++
++theorem transform_improved : ImprovedGoal := by
++  obtain ⟨o,s,a,b,hp,_⟩ := flagshipOne
++  have hN : ∀ n:ℕ, n ≤ id n ∧ id n ≤ 2*n := fun n => ⟨le_rfl,by dsimp; omega⟩
++  refine ⟨o,s,lunch a b id,hp,Skies.time_bound hN a b,?_⟩
++  exact ((Skies.lunch_big a b hN).trans_isLittleO (Skies.flight_little alpha_improved)).isBigO
++
++theorem convolution_improved : ImprovedConvGoal := by
++  obtain ⟨o,s,a,b,hp,_⟩ := flagshipBoth
++  have h (n : ℕ) : n ≤ stretch n ∧ stretch n ≤ 2*n := by unfold stretch; omega
++  refine ⟨o,s,lunch a b stretch,hp,Skies.time_bound h a b,?_⟩
++  exact ((Skies.lunch_big a b h).trans_isLittleO (Skies.flight_little alpha_improved)).isBigO
++
+ lemma matrix_definition (n : ℕ) (x : Vec n) : dft n x = Matrix.mulVec (dftMatrix n) x :=
+

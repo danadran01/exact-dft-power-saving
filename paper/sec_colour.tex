@@ -1,0 +1,1025 @@
+% =====================================================================================================
+% Section 5: Colour registers.  Body only; to be \input by the main file.
+% Requires: amsmath, amssymb, amsthm, booktabs; environments theorem, lemma, proposition, corollary,
+% definition, remark (one shared counter), proof; macros \F, \C, \N, \R; \cite{oai};
+% external labels thm:grouped, lem:batch, lem:certificate, prop:interface.
+% =====================================================================================================
+\section{Colour registers}\label{sec:colour}
+
+\newcommand{\colBot}{\mathrm{Bot}}
+\newcommand{\colTop}{\mathrm{Top}}
+\newcommand{\colXb}{\mathrm{Xb}}
+\newcommand{\colYt}{\mathrm{Yt}}
+\newcommand{\colDD}{\mathbb{D}}
+\newcommand{\colK}{\widetilde K}
+
+In the network of \cite[\S2]{oai}, every invocation carries one side wire $A_{ST}$ for each ordered pair
+of neighbouring triples. That is $d=\binom{h-3}{3}+3(h-3)$ auxiliary wires per bank element, and these
+wires make up almost all of the role count $W$. In this section we replace most of them by
+\emph{registers}. Each bank element owns a few auxiliary wires. The registers of many source elements
+meet the registers of many target elements at a common binary label, where a single gate can apply an
+arbitrary transfer matrix between them. A twelve-step schedule realizes the required transfer for
+arbitrary auxiliary contents (Lemma~\ref{col:lem:scalar}), and the stage-2 invocation is its
+inverse-transpose (Lemma~\ref{col:lem:reverse}). For the stage sizes $(h_1,h_2,h_3)=(30,20,41)$ the
+network uses about $57$, $40$ and $73$ auxiliary wires per bank element, instead of $3006$, $731$ and
+$8550$. It satisfies the hypotheses of the grouped tensor-power theorem with exponent
+$z=1-3.21\cdot10^{-6}$ (Theorem~\ref{col:thm:main}).
+
+We use the notation of \cite[\S2]{oai} throughout and cite its results without re-proving them. The
+construction is in Sections~\ref{col:sec:data}--\ref{col:sec:network}: factor data and centres, meeting
+labels, register designs, the invocations, labels and edges, and the network. The designs follow in
+Section~\ref{col:sec:designs}, and the exponent and the main theorem in
+Sections~\ref{col:sec:exponent}--\ref{col:sec:main}. Each statement below is proved here, cited, or
+explicitly marked as verified by exhaustive computation. The whole argument of this section is part of
+the formal verification described in Section~\ref{sec:formal}.
+
+%-----------------------------------------------------------------------------------------------------
+\subsection{Factor data and centres}\label{col:sec:data}
+
+Fix integers $h_1,h_2,h_3\ge 9$, indexed by the stage order. For $j=1,2,3$ let $D_j=\F^{h_j}$ with its
+ordinary dot product, and let
+\[
+  \colDD=D_1\otimes D_2\otimes D_3=\F^{m},\qquad m=h_1h_2h_3,
+\]
+with the tensor dot product, which is the ordinary dot product of $\F^m$ \cite[\S2.3]{oai}. For a
+binary vector $z$ we have $z\cdot z\equiv\mathrm{wt}(z)\pmod 2$, so $z$ has norm one if and only if it
+has odd weight. A subspace is \emph{nondegenerate} if the dot product restricted to it has zero
+radical. An \emph{orthonormal basis} (ONB) is a basis $z_1,\dots,z_r$ with $z_i\cdot z_k=\delta_{ik}$.
+Orthogonal complements are taken in the ambient space indicated ($D_j$, a tensor factor, or $\colDD$).
+For nested subspaces $U\subseteq V$, the \emph{residual} is $V\cap U^\perp$ \cite[Lemma~2.2]{oai}. We
+use two standard facts about symmetric bilinear forms over $\F$.
+\begin{itemize}
+\item[(F1)] If $U\subseteq V$ and $U$ is nondegenerate, then $V=U\perp(V\cap U^\perp)$ (an orthogonal direct
+  sum), so $\dim(V\cap U^\perp)=\dim V-\dim U$. The residual $V\cap U^\perp$ is nondegenerate if and only if
+  $V$ is. If $V=U\perp W$ is any orthogonal decomposition with $U$ nondegenerate, then $V\cap U^\perp=W$.
+  In a nondegenerate ambient space of dimension $n$, $\dim U^\perp=n-\dim U$.
+\item[(F2)] The Gram matrix of a tensor product of bases is the Kronecker product of the Gram
+  matrices. Hence tensor products of nondegenerate subspaces are nondegenerate, and tensor products
+  of ONBs are ONBs. An orthogonal sum is nondegenerate if and only if its summands are, and the union
+  of ONBs of the summands is an ONB of the sum.
+\end{itemize}
+
+\begin{definition}[factor data]\label{col:def:factor}
+Fix $j$ and write $h=h_j$, $D=D_j$. Let $\mathcal T=\mathcal T_j$ be the set of $3$-subsets of
+$[h]=\{1,\dots,h\}$, $v=v_j=\binom h3$, and $t_T\in D$ the indicator of $T\in\mathcal T$, so
+$t_T\cdot t_T=1$. As in \cite[\S2.1]{oai}, $S,T\in\mathcal T$ are \emph{neighbours} if $|S\cap T|$ is
+even, equivalently $t_S\cdot t_T=0$; neighbours are distinct. An \emph{ordered orthogonal pair} is an
+ordered pair $(T,S)$ of neighbours, so $|T\cap S|\in\{0,2\}$. Let $\Omega=\Omega_j$ be the set of
+ordered orthogonal pairs, $\Omega^0$ the subset with $T\cap S=\emptyset$, and $\Omega^2$ the subset with
+$|T\cap S|=2$. Then $\Omega=\Omega^0\sqcup\Omega^2$, with
+$|\Omega^0|=v\binom{h-3}{3}$ and $|\Omega^2|=3v(h-3)$.
+\end{definition}
+
+The banks are those of \cite[\S2.1]{oai}: wires $X_d,Y_d$ for
+$d\in\mathcal T_1\times\mathcal T_2\times\mathcal T_3$, with $N_0=v_1v_2v_3$, $u_d=t_{d_1}\otimes
+t_{d_2}\otimes t_{d_3}$ and $U_d=\langle u_d\rangle$. At stage $j$, an \emph{invocation} is indexed by
+$o\in\mathcal O_j:=\prod_{l\neq j}\mathcal T_l$, so there are $N_0/v_j$ invocations. For
+$T\in\mathcal T_j$ let $(o,T)$ be the key with $j$-th entry $T$ and other entries $o$. The invocation
+$o$ has \emph{source bank} $x_T:=X_{(o,T)}$ and \emph{target bank} $y_S:=Y_{(o,S)}$
+($T,S\in\mathcal T_j$). Its stage spaces are those of \cite[\S2.3]{oai}:
+\[
+  E=\textstyle\bigotimes_{l<j}D_l,\quad P=\langle p\rangle,\ p=\bigotimes_{l<j}t_{o_l},\quad B=P^\perp\cap E,
+  \quad F=\bigotimes_{l>j}D_l,\quad Q=\langle q\rangle,\ q=\bigotimes_{l>j}t_{o_l}.
+\]
+An empty tensor product is $\F$. Thus $p\cdot p=q\cdot q=1$ and $E=B\perp P$, with $B=0$ at stage~1
+and $Q=F=\F$ at stage~3. Put $\alpha_j=\dim E=\prod_{l<j}h_l$ and $\beta_j=\dim F=\prod_{l>j}h_l$. Then
+$m=\alpha_jh_j\beta_j$ and $\dim B=\alpha_j-1$.
+
+\begin{definition}[centres]\label{col:def:centres}
+With $h$, $\mathcal T$ as above, let $G\colon\C^{\mathcal T}\to\C^{h}$ and $R\colon\C^{h}\to\C^{\mathcal T}$ be
+\[
+  (Gx)_i=\tfrac12\Big(\sum_{T\ni i}x_T-\tfrac13\sum_{T\in\mathcal T}x_T\Big),\qquad
+  (Rc)_S=\sum_{i\in S}c_i ,
+\]
+and for $S,T\in\mathcal T$ put $K_{ST}:=\tfrac12\big(1-|S\cap T|\big)$. Thus $K_{ST}=K_{TS}$; it equals
+$\tfrac12$ on disjoint pairs and $-\tfrac12$ on pairs meeting in two points.
+\end{definition}
+
+\begin{lemma}[$h$ centres]\label{col:lem:centres}
+For all $S,T\in\mathcal T$,
+\[
+  (RG)_{ST}=\tfrac12\big(|S\cap T|-1\big)=-K_{ST}.
+\]
+Consequently $RG+K\circ 1_\Omega=I$, where $(K\circ1_\Omega)_{ST}=K_{ST}$ if $(T,S)\in\Omega$ and $0$ otherwise.
+\end{lemma}
+
+\begin{proof}
+Since $|S|=3$,
+$(RG)_{ST}=\sum_{i\in S}G_{iT}=\tfrac12\sum_{i\in S}\big([i\in T]-\tfrac13\big)=\tfrac12(|S\cap T|-1)$.
+Consider the entry $(S,T)$ of $RG+K\circ1_\Omega$. If $S=T$, then $|S\cap T|=3$, so $(RG)_{TT}=1$, and
+$(T,T)\notin\Omega$. If $|S\cap T|=1$, then $(RG)_{ST}=0$ and $(T,S)\notin\Omega$. If $|S\cap T|\in\{0,2\}$,
+then $(T,S)\in\Omega$ and the entry is $(RG)_{ST}+K_{ST}=0$.
+\end{proof}
+
+\begin{remark}\label{col:rem:centres}
+OpenAI's network uses $h+1$ centres $c_1,\dots,c_h,c_*$ and obtains the same matrix
+$(RG)_{ST}=(|S\cap T|-1)/2$ \cite[\S2.1 and proof of Lemma~2.1]{oai}. Lemma~\ref{col:lem:centres} shows
+that $c_*$ is unnecessary: each invocation needs only $h_j$ centres. OpenAI's side-wire map is
+$(JA)_S=-\sum_{T}\frac{|S\cap T|-1}{2}A_{ST}=\sum_{T}K_{ST}A_{ST}$, the sum over the neighbours $T$
+of $S$.
+\end{remark}
+
+%-----------------------------------------------------------------------------------------------------
+\subsection{Meeting labels}\label{col:sec:labels}
+
+Fix a stage $j$ and an invocation $o$, and write $D=D_j$, $h=h_j$, $\alpha=\alpha_j$, $\beta=\beta_j$.
+
+\begin{definition}[meeting labels]\label{col:def:lambda}
+For a subspace $L\subseteq D$ put
+\[
+  \Lambda_L:=\big((B\otimes D)\perp(P\otimes L)\big)\otimes Q\ \subseteq\ \colDD .
+\]
+The special labels are
+\[
+  \colBot:=\Lambda_0=B\otimes D\otimes Q,\qquad \colXb(t):=\Lambda_{\langle t\rangle},\qquad
+  \colYt(t):=\Lambda_{t^\perp},\qquad \colTop:=\Lambda_D=E\otimes D\otimes Q,
+\]
+for $t=t_T$, with $t^\perp$ taken in $D$.
+\end{definition}
+
+These are labels of \cite[(2.7)]{oai}, with $D$ replaced by $D_j$. $\colBot$ is the row-1 and row-4
+label. $\colXb(t)$ is the row-2 label. $\colYt(t)$ is the row-5 label and the outgoing label of the
+target bank. $\colTop$ is the row-3, row-6 and row-7 label and the outgoing label of the source bank.
+The row-0 label $B\otimes\langle t\rangle\otimes Q$ of \cite{oai} is replaced by $\colBot$.
+
+\begin{lemma}[meeting labels]\label{col:lem:lambda}
+Let $L\subseteq L'\subseteq D$ be subspaces.
+\begin{enumerate}
+\item[(i)] $\Lambda_L=\colBot\perp(P\otimes L\otimes Q)$, and $z\mapsto p\otimes z\otimes q$ is an
+  isometric linear embedding of $D$ onto $P\otimes D\otimes Q$. Hence $\Lambda_L$ is nondegenerate if and
+  only if $L$ is, and $\Lambda_L\subseteq\Lambda_{L'}$. In particular $\colBot$, $\colXb(t)$, $\colYt(t)$
+  and $\colTop$ are nondegenerate.
+\item[(ii)] If $L$ and $L'$ are nondegenerate, the residual of $\Lambda_L\subseteq\Lambda_{L'}$ is
+  $P\otimes(L'\cap L^\perp)\otimes Q$, of dimension $\dim L'-\dim L$.
+\item[(iii)] If $z_1,\dots,z_r$ is an ONB of $N\subseteq D$, then $p\otimes z_1\otimes q,\dots,p\otimes z_r\otimes q$
+  is an ONB of $P\otimes N\otimes Q$.
+\item[(iv)] \cite[end of \S2.3]{oai} A nondegenerate subspace $N\subseteq\F^n$ has an ONB if and only if
+  $N=0$ or $N$ contains a vector of odd weight.
+\end{enumerate}
+\end{lemma}
+
+\begin{proof}
+(i) $B\perp P$ gives $B\otimes D\perp P\otimes L$. Moreover
+$(p\otimes z\otimes q)\cdot(p\otimes z'\otimes q)=(p\cdot p)(z\cdot z')(q\cdot q)=z\cdot z'$, and the map is
+injective because $p,q\ne0$. So $P\otimes L\otimes Q$ is isometric to $L$. The space $B$ is
+nondegenerate by (F1), being the residual of the nondegenerate line $P$ in $E$. Hence $\colBot$ is
+nondegenerate by (F2), and $\Lambda_L$ is nondegenerate if and only if $L$ is, again by (F2). The
+subspaces $0$, $\langle t\rangle$, $t^\perp$ and $D$ are nondegenerate, $t^\perp$ by (F1). Monotonicity is
+clear.
+(ii) By (F1), $L'=L\perp N$ with $N=L'\cap L^\perp$. Applying the isometry of (i),
+$\Lambda_{L'}=\Lambda_L\perp(P\otimes N\otimes Q)$, and the last part of (F1) identifies the residual. Its
+dimension is $\dim N=\dim L'-\dim L$. (iii) follows from the isometry in (i). (iv) is the splitting
+statement at the end of \cite[\S2.3]{oai}, with ``norm one'' read as ``odd weight''. The converse is
+trivial, since ONB vectors have norm one.
+\end{proof}
+
+%-----------------------------------------------------------------------------------------------------
+\subsection{Register designs}\label{col:sec:designs-def}
+
+\begin{definition}[register design]\label{col:def:design}
+Let $h\ge 9$, $D=\F^h$, and let $\mathcal T$, $\Omega$ be as in Definition~\ref{col:def:factor}. A
+\emph{register design} $\mathcal R$ for $D$ consists of finite sets $\mathcal X$ (X-registers),
+$\mathcal Y$ (Y-registers), $\mathrm{Tr}$ (transfers) and $\Sigma$ (side pairs) with the following
+data.
+\begin{itemize}
+\item Each $\xi\in\mathcal X$ has an \emph{owner} $T_\xi\in\mathcal T$ and a \emph{chain}
+  $L_{\xi,1}\subsetneq\dots\subsetneq L_{\xi,k_\xi}$ of subspaces of $D$, with $k_\xi\ge1$.
+\item Each $\eta\in\mathcal Y$ has an owner $S_\eta\in\mathcal T$ and a chain
+  $L_{\eta,1}\subsetneq\dots\subsetneq L_{\eta,k_\eta}$, with $k_\eta\ge1$.
+\item Each $\tau\in\mathrm{Tr}$ has an X-register $\xi_\tau$, a Y-register $\eta_\tau$ and a label
+  $L_\tau\subseteq D$. Its \emph{owner pair} is $(T_{\xi_\tau},S_{\eta_\tau})$.
+\item Each $\sigma\in\Sigma$ is an ordered orthogonal pair $(T_\sigma,S_\sigma)\in\Omega$.
+\end{itemize}
+The \emph{meeting labels} are the subspaces that occur in chains. For $T,S\in\mathcal T$ the
+\emph{cover count} is
+\[
+  n(T,S)=\#\{\tau:(T_{\xi_\tau},S_{\eta_\tau})=(T,S)\}+\#\{\sigma:(T_\sigma,S_\sigma)=(T,S)\}.
+\]
+The design must satisfy:
+\begin{enumerate}
+\item[(D1)] every meeting label is nondegenerate;
+\item[(D2)] for every X-register with owner $T$ and chain $L_1\subsetneq\dots\subsetneq L_k$:
+  $t_T\in L_1$, and each of the spaces $L_1\cap t_T^\perp$, $L_{i+1}\cap L_i^\perp$ $(1\le i<k)$ and
+  $L_k^\perp$ is $0$ or contains a vector of odd weight;
+\item[(D3)] for every Y-register with owner $S$ and chain $L_1\subsetneq\dots\subsetneq L_k$:
+  $L_k\subseteq t_S^\perp$, and each of the spaces $L_1$, $L_{i+1}\cap L_i^\perp$ $(1\le i<k)$ and
+  $t_S^\perp\cap L_k^\perp$ is $0$ or contains a vector of odd weight;
+\item[(D4)] for every transfer $\tau$, the label $L_\tau$ belongs to the chain of $\xi_\tau$ and to the
+  chain of $\eta_\tau$;
+\item[(D5)] $n(T,S)=1$ for $(T,S)\in\Omega$, and $n(T,S)=0$ for $(T,S)\notin\Omega$.
+\end{enumerate}
+For $\Omega'\subseteq\Omega$, a \emph{partial register design for $\Omega'$} satisfies (D1)--(D4) and
+(D5$_{\Omega'}$): $n(T,S)=1$ for $(T,S)\in\Omega'$ and $n(T,S)=0$ otherwise. We write
+$\mathrm{regs}(\mathcal R)=|\mathcal X|+|\mathcal Y|$ and $\mathrm{side}(\mathcal R)=|\Sigma|$.
+\end{definition}
+
+If $\mathcal X=\mathcal Y=\mathrm{Tr}=\emptyset$ and $\Sigma=\Omega$, (D1)--(D5) hold trivially. This
+design gives OpenAI's side wires, one for each ordered orthogonal pair. The point of registers is that
+one meeting label can serve many pairs: if $w$ X-registers and $r$ Y-registers share a meeting label,
+transfers at that label can cover up to $wr$ ordered pairs with $w+r$ wires.
+
+\begin{lemma}[union]\label{col:lem:union}
+If $\mathcal R'$ and $\mathcal R''$ are partial register designs for disjoint sets $\Omega',\Omega''$, then
+their disjoint union (of registers, transfers and side pairs) is a partial register design for
+$\Omega'\cup\Omega''$. In particular, a partial design for $\Omega^0$ together with one for $\Omega^2$ is a
+register design.
+\end{lemma}
+
+\begin{proof}
+Conditions (D1)--(D4) concern individual registers and transfers, and the cover counts add.
+\end{proof}
+
+\begin{lemma}[first-cover designs]\label{col:lem:firstcover}
+Let $\Omega'\subseteq\Omega$, and let $\mathcal X$, $\mathcal Y$ be finite sets of registers (owners and
+chains) satisfying (D1)--(D3). Let $\mathcal C$ be a finite, totally ordered set of \emph{candidates}
+$\gamma=(L_\gamma,\xi_\gamma,\eta_\gamma)$, where $L_\gamma$ lies in the chains of both $\xi_\gamma$ and
+$\eta_\gamma$ and the owner pair $(T_{\xi_\gamma},S_{\eta_\gamma})$ lies in $\Omega'$. Call a pair
+\emph{covered} if it is the owner pair of some candidate. Define:
+\begin{itemize}
+\item $\mathrm{Tr}$: for each covered pair, the first candidate with that owner pair;
+\item $\Sigma$: the pairs of $\Omega'$ that are not covered.
+\end{itemize}
+Then $(\mathcal X,\mathcal Y,\mathrm{Tr},\Sigma)$ is a partial register design for $\Omega'$, and
+$|\Sigma|=|\Omega'|-\#\{\text{covered pairs}\}$.
+\end{lemma}
+
+\begin{proof}
+(D1)--(D3) are assumed, and (D4) holds because every candidate's label lies in both chains. A pair of
+$\Omega'$ is covered by exactly one transfer if it is covered, and by exactly one side pair otherwise.
+A pair outside $\Omega'$ is the owner pair of no candidate and is not in $\Sigma$.
+\end{proof}
+
+\begin{remark}[first-cover semantics]\label{col:rem:firstcover}
+In Lemma~\ref{col:lem:firstcover}, a candidate that is not selected still has both registers passing
+through its label. In step~5 of the schedule below the two registers then meet at that label with
+coefficient $0$, which is harmless. A design can therefore be specified by its registers and an ordered
+candidate list. The transfer of a pair is assigned to its first covering candidate, and the side pairs
+are \emph{defined} as the uncovered pairs. With these semantics, the exact cover (D5) holds by
+construction. The only global quantity that must be computed is the number $|\Sigma|$ of uncovered
+pairs, which enters the role count.
+\end{remark}
+
+%-----------------------------------------------------------------------------------------------------
+\subsection{The invocations}\label{col:sec:invocations}
+
+Fix a stage $j$, an invocation $o$, and data $(\mathcal X,\mathcal Y,\mathrm{Tr},\Sigma)$ as in
+Definition~\ref{col:def:design} for $D=D_j$. Conditions (D1)--(D5) are imposed only where stated. The
+wires of the invocation are:
+\begin{itemize}
+\item the source and target bank entries $x_T$, $y_S$ $(T,S\in\mathcal T)$;
+\item centres $c_1,\dots,c_h$;
+\item one side wire $A_\sigma$ for each $\sigma\in\Sigma$;
+\item one X-register wire $a_\xi$ for each $\xi\in\mathcal X$ and one Y-register wire $b_\eta$ for each
+  $\eta\in\mathcal Y$.
+\end{itemize}
+All but the bank entries are private to the invocation. Besides $G$ and $R$ we use the linear maps
+\begin{gather*}
+  (\Pi x)_\xi=x_{T_\xi},\qquad (Vx)_\sigma=x_{T_\sigma},\qquad
+  (\Xi b)_S=\sum_{\eta:\,S_\eta=S}b_\eta,\qquad (JA)_S=\sum_{\sigma:\,S_\sigma=S}K_{ST_\sigma}A_\sigma,\\
+  (\colK_La)_\eta=\sum_{\tau:\,\eta_\tau=\eta,\ L_\tau=L}K_{S_\eta T_{\xi_\tau}}\,a_{\xi_\tau},\qquad
+  \colK=\sum_{L}\colK_L .
+\end{gather*}
+So $\Pi$ copies $x_T$ into the X-registers of $T$, $\Xi$ sums the Y-registers of $S$ into $y_S$, and
+$\colK$ is the \emph{transfer matrix}: the entry $K_{ST}$ goes from the X-register to the Y-register of
+each transfer with owner pair $(T,S)$. When $\Sigma=\Omega$, the map $J$ is OpenAI's
+(Remark~\ref{col:rem:centres}).
+
+\begin{definition}[forward invocation]\label{col:def:forward}
+The \emph{forward invocation} is the chronological sequence of gates in
+Table~\ref{col:tab:schedule}. A gate is a linear map $I+Z$ of the vector of wire values. $Z$ is the
+displayed increment, and it is supported on the listed wires, which the gate \emph{touches}. The gate's
+label is the listed subspace. In step~5 there is one gate for every meeting label $L$, with increment
+$\colK_L$. It touches all registers whose chain contains $L$, and the gates are applied in order of
+nondecreasing $\dim L$, with ties in any fixed order. Under (D4), $\colK_L$ acts only on registers whose
+chains contain $L$, so its support lies in the touched wires.
+\end{definition}
+
+\begin{table}[ht]\centering\small
+\begin{tabular}{@{}r l p{6.9cm} l@{}}
+\toprule
+step & update & gates and touched wires & label\\
+\midrule
+1 & $y\leftarrow y-Rc$ & one gate: all $y_S$ and all $c_i$ & $\colBot$\\
+2 & $y\leftarrow y-\Xi b-JA$ & one gate per $S$: $y_S$; $b_\eta$ with $S_\eta=S$; $A_\sigma$ with $S_\sigma=S$ & $\colBot$\\
+3 & $b\leftarrow b-\colK a$ & one gate: all registers & $\colBot$\\
+4 & $a\leftarrow a+\Pi x$, $A\leftarrow A+Vx$ & one gate per $T$: $x_T$; $a_\xi$ with $T_\xi=T$; $A_\sigma$ with $T_\sigma=T$ & $\colXb(t_T)$\\
+5 & $b\leftarrow b+\colK_L a$ & one gate per meeting label $L$, by nondecreasing $\dim L$: all registers whose chain contains $L$ & $\Lambda_L$\\
+6 & $c\leftarrow c+Gx$ & one gate: all $x_T$ and all $c_i$ & $\colTop$\\
+7 & $y\leftarrow y+Rc$ & one gate: all $y_S$ and all $c_i$ & $\colBot$\\
+8 & $y\leftarrow y+\Xi b+JA$ & one gate per $S$, touching the same wires as in step 2 & $\colYt(t_S)$\\
+9 & $c\leftarrow c-Gx$ & as in step 6 & $\colTop$\\
+10 & $b\leftarrow b-\colK a$ & as in step 3 & $\colTop$\\
+11 & $a\leftarrow a-\Pi x$, $A\leftarrow A-Vx$ & one gate per $T$, touching the same wires as in step 4 & $\colTop$\\
+12 & $b\leftarrow b+\colK a$ & as in step 3 & $\colTop$\\
+\bottomrule
+\end{tabular}
+\caption{The forward invocation (stages 1 and 3). All labels include the factor $Q$
+(Definition~\ref{col:def:lambda}).}\label{col:tab:schedule}
+\end{table}
+
+Gates of one step touch pairwise disjoint sets of wires, except in step~5. There, two gates at distinct
+meeting labels of equal dimension touch disjoint sets of registers, because a strictly increasing chain
+contains at most one subspace of each dimension. Every increment $Z$ maps wires of one kind into wires
+of a different kind, as in
+$x\to c$, $c\to y$, $\{b,A\}\to y$, $x\to\{a,A\}$ and $a\to b$. Hence $Z^2=0$ for every gate.
+
+\begin{remark}\label{col:rem:oairows}
+If $\mathcal X=\mathcal Y=\emptyset$, steps 3, 5, 10 and 12 are empty. The remaining steps are OpenAI's
+rows \cite[(2.3)]{oai} in the order $1,0,2,3,4,5,6,7$, with $h$ centres and the row-0 label $\colBot$.
+Rows~0 and~1 commute, since both only subtract from $y$, using wires that neither modifies.
+\end{remark}
+
+\begin{lemma}[scalar identity]\label{col:lem:scalar}
+For arbitrary initial values of all wires, the forward invocation maps
+\[
+  (x,y,c,A,a,b)\longmapsto(x,\;y+Mx,\;c,A,a,b),\qquad M=RG+JV+\Xi\colK\Pi ,
+\]
+where $M_{ST}=(RG)_{ST}+K_{ST}\,n(T,S)$. If (D5) holds, then $M=I$. That is, the forward invocation
+maps $(x,y)\mapsto(x,y+x)$ and restores every auxiliary wire.
+\end{lemma}
+
+\begin{proof}
+No gate writes $x$. Let $(x,y_0,c_0,A_0,a_0,b_0)$ be the initial values. In step~5 every gate writes
+only $b$ and reads only $a$, and $a$ is not written in step~5. So step~5 as a whole adds
+$\sum_L\colK_La=\colK a$ to $b$, whatever the order of its gates. Steps with several gates act on
+disjoint wires, so each step performs the displayed update. Table~\ref{col:tab:trace} records the
+wires written in each step and their values afterwards. Every entry follows from the previous ones and
+the update of the step.
+
+\begin{table}[ht]\centering\small
+\begin{tabular}{@{}r l l@{}}
+\toprule
+after step & wires written & value\\
+\midrule
+1 & $y$ & $y_0-Rc_0$\\
+2 & $y$ & $y_0-Rc_0-\Xi b_0-JA_0$\\
+3 & $b$ & $b_0-\colK a_0$\\
+4 & $a$, $A$ & $a_0+\Pi x$,\quad $A_0+Vx$\\
+5 & $b$ & $b_0-\colK a_0+\colK(a_0+\Pi x)=b_0+\colK\Pi x$\\
+6 & $c$ & $c_0+Gx$\\
+7 & $y$ & $y_0-Rc_0-\Xi b_0-JA_0+R(c_0+Gx)=y_0+RGx-\Xi b_0-JA_0$\\
+8 & $y$ & $y_0+RGx-\Xi b_0-JA_0+\Xi(b_0+\colK\Pi x)+J(A_0+Vx)=y_0+Mx$\\
+9 & $c$ & $c_0$\\
+10 & $b$ & $b_0+\colK\Pi x-\colK(a_0+\Pi x)=b_0-\colK a_0$\\
+11 & $a$, $A$ & $a_0$,\quad $A_0$\\
+12 & $b$ & $b_0-\colK a_0+\colK a_0=b_0$\\
+\bottomrule
+\end{tabular}
+\caption{Values in the proof of Lemma~\ref{col:lem:scalar}.}\label{col:tab:trace}
+\end{table}
+
+Now compute $M$. By definition,
+$(JVx)_S=\sum_{\sigma:\,S_\sigma=S}K_{ST_\sigma}x_{T_\sigma}$, so
+$(JV)_{ST}=K_{ST}\cdot\#\{\sigma:(T_\sigma,S_\sigma)=(T,S)\}$. Also
+$(\Xi\colK\Pi x)_S=\sum_{\eta:\,S_\eta=S}\sum_{\tau:\,\eta_\tau=\eta}K_{ST_{\xi_\tau}}x_{T_{\xi_\tau}}$, so
+$(\Xi\colK\Pi)_{ST}=K_{ST}\cdot\#\{\tau:(T_{\xi_\tau},S_{\eta_\tau})=(T,S)\}$. Hence
+$M_{ST}=(RG)_{ST}+K_{ST}\,n(T,S)$. Under (D5), $n(T,S)=[(T,S)\in\Omega]$, and
+Lemma~\ref{col:lem:centres} gives $M=I$.
+\end{proof}
+
+\begin{lemma}[reverse invocation]\label{col:lem:reverse}
+Define the \emph{reverse invocation} by replacing each gate $I+Z$ of the forward invocation by
+$I-Z^{\mathsf T}$, keeping its touched wires, its label and its place in the chronological order. Assume
+(D5). For arbitrary initial values of all wires the reverse invocation maps
+\[
+  (x,y,c,A,a,b)\longmapsto(x-y,\;y,\;c,A,a,b).
+\]
+Every wire has the same sequence of touches and labels in both invocations, so the two invocations have
+the same edges and residuals.
+\end{lemma}
+
+\begin{proof}
+Let $N_1,\dots,N_r$ be the gates of the forward invocation in chronological order. By
+Lemma~\ref{col:lem:scalar} and (D5), $N:=N_r\cdots N_1=I+\mathcal E$, where $\mathcal E$ has entry $1$ in
+position $(y_T,x_T)$ for each $T$ and $0$ elsewhere. Since $Z^2=0$ for every gate,
+$(I+Z)^{-1}=I-Z$, so the reverse gates are $N_i^{-\mathsf T}$. The reverse invocation is therefore
+\[
+  N_r^{-\mathsf T}\cdots N_1^{-\mathsf T}=\big(N_1^{-1}\cdots N_r^{-1}\big)^{\mathsf T}=(N^{-1})^{\mathsf T}
+  =(I-\mathcal E)^{\mathsf T}=I-\mathcal E^{\mathsf T},
+\]
+using $\mathcal E^2=0$. The map $I-\mathcal E^{\mathsf T}$ sends $x_T\mapsto x_T-y_T$ and fixes every other wire.
+The support of $Z^{\mathsf T}$ lies in the same set of wires as the support of $Z$, so the touched wires
+and labels are unchanged by construction.
+\end{proof}
+
+\begin{remark}\label{col:rem:reverse}
+Explicitly, the reverse invocation reads, for example: step~1 $c\leftarrow c+R^{\mathsf T}y$;
+step~2 $b_\eta\leftarrow b_\eta+y_{S_\eta}$ and $A_\sigma\leftarrow A_\sigma+K_{S_\sigma T_\sigma}y_{S_\sigma}$;
+step~4 $x_T\leftarrow x_T-\sum_{T_\xi=T}a_\xi-\sum_{T_\sigma=T}A_\sigma$; step~5
+$a\leftarrow a-\colK_L^{\mathsf T}b$; step~6 $x\leftarrow x-G^{\mathsf T}c$. Data flow from $Y$ to $X$,
+but every X-register still belongs to the X bank and every Y-register to the Y bank, so the physical
+touch sequence is that of Table~\ref{col:tab:schedule}. This replaces OpenAI's reversal of the rows
+\cite[\S2.3, after (2.7)]{oai} and makes a separate reverse schedule unnecessary.
+\end{remark}
+
+%-----------------------------------------------------------------------------------------------------
+\subsection{Labels and edges}\label{col:sec:edges}
+
+At stage $j$ the \emph{incoming labels} are $E\otimes\langle t_T\rangle\otimes Q$ on $x_T$ and
+$B\otimes\langle t_S\rangle\otimes Q$ on $y_S$. The \emph{outgoing labels} are $\colTop$ on $x_T$ and
+$\colYt(t_S)$ on $y_S$. Each auxiliary wire has source label $0$ and sink label $\colDD$. These are the
+stage-boundary labels of \cite[\S2.3]{oai}, with $D$ replaced by $D_j$. As shown there, the outgoing
+labels of stage $j$ are the incoming labels of stage $j+1$; the incoming labels at stage 1 are $U_d$
+(on $X_d$) and $0$ (on $Y_d$); and the outgoing labels at stage 3 are $\colDD$ and $U_d^\perp$.
+
+\begin{lemma}[labels and edges]\label{col:lem:edges}
+Assume (D1)--(D4) for the design of factor $j$. In every invocation at stage $j$, forward or reverse:
+\begin{enumerate}
+\item[(a)] every gate label is nondegenerate;
+\item[(b)] the label sequence of every wire is as in Table~\ref{col:tab:paths}. In particular each
+  register is touched at $\colBot$, then (X-registers only) at $\colXb(t_T)$, then at its chain labels in
+  increasing order, then (Y-registers only) at $\colYt(t_S)$, and finally at $\colTop$;
+\item[(c)] consecutive labels along every wire are nested. The nonzero residuals and their dimensions are
+  those of Table~\ref{col:tab:residuals}. Every residual is nondegenerate and has an ONB;
+\item[(d)] every edge is increasing, except the centre edges from step~6 to step~7, which decrease by
+  $P\otimes D\otimes Q$, of dimension $h_j$.
+\end{enumerate}
+\end{lemma}
+
+\begin{table}[ht]\centering\small
+\begin{tabular}{@{}l l@{}}
+\toprule
+wire & label sequence (step numbers in brackets)\\
+\midrule
+$x_T$ & in $\to\colXb(t_T)\,[4]\to\colTop\,[6,9,11]=$ out\\
+$y_S$ & in $\to\colBot\,[1,2,7]\to\colYt(t_S)\,[8]=$ out\\
+$c_i$ & $0\to\colBot\,[1]\to\colTop\,[6]\to\colBot\,[7]\to\colTop\,[9]\to\colDD$\\
+$A_\sigma$ & $0\to\colBot\,[2]\to\colXb(t_{T_\sigma})\,[4]\to\colYt(t_{S_\sigma})\,[8]\to\colTop\,[11]\to\colDD$\\
+$a_\xi$ & $0\to\colBot\,[3]\to\colXb(t_{T_\xi})\,[4]\to\Lambda_{L_{\xi,1}}\to\dots\to\Lambda_{L_{\xi,k}}\,[5]\to\colTop\,[10,11,12]\to\colDD$\\
+$b_\eta$ & $0\to\colBot\,[2,3]\to\Lambda_{L_{\eta,1}}\to\dots\to\Lambda_{L_{\eta,k}}\,[5]\to\colYt(t_{S_\eta})\,[8]\to\colTop\,[10,12]\to\colDD$\\
+\bottomrule
+\end{tabular}
+\caption{Label sequences in one invocation. ``In'' and ``out'' are the stage-boundary
+labels.}\label{col:tab:paths}
+\end{table}
+
+\begin{table}[ht]\centering\small
+\begin{tabular}{@{}l l l l@{}}
+\toprule
+wire & edge & residual & dimension\\
+\midrule
+$x_T$, $t=t_T$ & in $\to4$ & $B\otimes t^\perp\otimes Q$ & $(\alpha-1)(h-1)$\\
+ & $4\to6$ & $P\otimes t^\perp\otimes Q$ & $h-1$\\
+$y_S$, $t=t_S$ & in $\to1$ & $B\otimes t^\perp\otimes Q$ & $(\alpha-1)(h-1)$\\
+ & $7\to8$ & $P\otimes t^\perp\otimes Q$ & $h-1$\\
+$c_i$ & source $\to1$ & $B\otimes D\otimes Q$ & $(\alpha-1)h$\\
+ & $1\to6$;\ $6\to7$ (decrease);\ $7\to9$ & $P\otimes D\otimes Q$ & $h$ each\\
+ & $9\to$ sink & $E\otimes D\otimes Q^\perp$ & $\alpha h(\beta-1)$\\
+$A_\sigma$, $(T,S)=(T_\sigma,S_\sigma)$ & source $\to2$ & $B\otimes D\otimes Q$ & $(\alpha-1)h$\\
+ & $2\to4$ & $P\otimes\langle t_T\rangle\otimes Q$ & $1$\\
+ & $4\to8$ & $P\otimes\langle t_T,t_S\rangle^\perp\otimes Q$ & $h-2$\\
+ & $8\to11$ & $P\otimes\langle t_S\rangle\otimes Q$ & $1$\\
+ & $11\to$ sink & $E\otimes D\otimes Q^\perp$ & $\alpha h(\beta-1)$\\
+$a_\xi$, owner $T$ & source $\to3$ & $B\otimes D\otimes Q$ & $(\alpha-1)h$\\
+\quad chain $L_1\subsetneq\dots\subsetneq L_k$ & $3\to4$ & $P\otimes\langle t_T\rangle\otimes Q$ & $1$\\
+ & $4\to L_1$ & $P\otimes(L_1\cap t_T^\perp)\otimes Q$ & $\dim L_1-1$\\
+ & $L_i\to L_{i+1}$ & $P\otimes(L_{i+1}\cap L_i^\perp)\otimes Q$ & $\dim L_{i+1}-\dim L_i$\\
+ & $L_k\to10$ & $P\otimes L_k^\perp\otimes Q$ & $h-\dim L_k$\\
+ & $12\to$ sink & $E\otimes D\otimes Q^\perp$ & $\alpha h(\beta-1)$\\
+$b_\eta$, owner $S$ & source $\to2$ & $B\otimes D\otimes Q$ & $(\alpha-1)h$\\
+\quad chain $L_1\subsetneq\dots\subsetneq L_k$ & $3\to L_1$ & $P\otimes L_1\otimes Q$ & $\dim L_1$\\
+ & $L_i\to L_{i+1}$ & $P\otimes(L_{i+1}\cap L_i^\perp)\otimes Q$ & $\dim L_{i+1}-\dim L_i$\\
+ & $L_k\to8$ & $P\otimes(t_S^\perp\cap L_k^\perp)\otimes Q$ & $h-1-\dim L_k$\\
+ & $8\to10$ & $P\otimes\langle t_S\rangle\otimes Q$ & $1$\\
+ & $12\to$ sink & $E\otimes D\otimes Q^\perp$ & $\alpha h(\beta-1)$\\
+\bottomrule
+\end{tabular}
+\caption{Residuals of one invocation at stage $j$ ($h=h_j$, $\alpha=\alpha_j$, $\beta=\beta_j$).
+``$L_i$'' denotes the step-5 touch at $\Lambda_{L_i}$, $Q^\perp$ is taken in $F$, and $\perp$ inside the
+middle factor is taken in $D$. All edges not listed have zero residual.}\label{col:tab:residuals}
+\end{table}
+
+\begin{proof}
+(a) The gate labels are $\colBot$, $\colTop$, $\colXb(t)$, $\colYt(t)$ and the $\Lambda_L$ for meeting
+labels $L$. They are nondegenerate by Lemma~\ref{col:lem:lambda}(i) and (D1).
+
+(b) Read off the touched wires of each step in Table~\ref{col:tab:schedule}. In step~5 the gates are
+applied in order of nondecreasing dimension, and the dimensions along a chain strictly increase. So each
+register meets its chain labels in chain order, and by (D4) each transfer lies in a gate touching both
+of its registers. By Lemma~\ref{col:lem:reverse} the reverse invocation has the same sequences.
+
+(c) We use the orthogonal decompositions $E=B\perp P$, $D=\langle t\rangle\perp t^\perp$ and
+$F=Q\perp Q^\perp$, together with (F1) and Lemma~\ref{col:lem:lambda}(ii).
+\begin{itemize}
+\item \emph{Banks.} $E\otimes\langle t\rangle\otimes Q=(B\otimes\langle t\rangle\perp P\otimes\langle t\rangle)\otimes Q$ and
+  $\colXb(t)=(B\otimes\langle t\rangle\perp B\otimes t^\perp\perp P\otimes\langle t\rangle)\otimes Q$. Hence the
+  first is contained in the second, with residual $B\otimes t^\perp\otimes Q$. In the same way
+  $B\otimes\langle t\rangle\otimes Q\subseteq\colBot$, with the same residual. The edges
+  $\colXb(t)\subseteq\colTop$ and $\colBot\subseteq\colYt(t)$ are the cases $\langle t\rangle\subseteq D$
+  and $0\subseteq t^\perp$ of Lemma~\ref{col:lem:lambda}(ii).
+\item \emph{Centres.} $\colTop=\colBot\perp P\otimes D\otimes Q$ by Lemma~\ref{col:lem:lambda}(i), and
+  $\colDD=E\otimes D\otimes F=\colTop\perp E\otimes D\otimes Q^\perp$.
+\item \emph{Side wires.} $(T,S)\in\Omega$, so $\langle t_T\rangle\subseteq t_S^\perp$, and
+  Lemma~\ref{col:lem:lambda}(ii) applies to $0\subseteq\langle t_T\rangle\subseteq t_S^\perp\subseteq D$.
+  The residuals are $\langle t_T\rangle$, then $t_S^\perp\cap t_T^\perp=\langle t_T,t_S\rangle^\perp$, then
+  $\langle t_S\rangle$.
+\item \emph{Registers.} By (D2), $\langle t_T\rangle\subseteq L_1\subsetneq\dots\subsetneq L_k\subseteq D$. By
+  (D3), $0\subseteq L_1\subsetneq\dots\subsetneq L_k\subseteq t_S^\perp\subseteq D$. All of these subspaces are
+  nondegenerate by (D1) and (F1). Lemma~\ref{col:lem:lambda}(ii) gives the listed residuals and
+  dimensions, using $\dim t_S^\perp=h-1$.
+\end{itemize}
+Every residual is nondegenerate by (F1). It remains to find ONBs. By (F2) and
+Lemma~\ref{col:lem:lambda}(iii), it suffices to find ONBs of the tensor factors.
+\begin{itemize}
+\item $D$ and $E$ have the coordinate ONBs, and $\langle t\rangle$ has the ONB $t$.
+\item $t^\perp$ contains $e_i$ for $i\notin T$. Since $(T,S)\in\Omega$, $\langle t_T,t_S\rangle^\perp$
+  contains $e_i$ for $i\notin T\cup S$; such $i$ exists because $|T\cup S|\le6<h$.
+\item If $B\ne0$, it contains a coordinate unit $e_{i_1}\otimes\dots\otimes e_{i_{j-1}}$ of $E$ with
+  $i_1\notin o_1$, which is orthogonal to $p$. Similarly $Q^\perp\ne0$ contains a coordinate unit of
+  $F$ orthogonal to $q$ \cite[proof of Lemma~2.3]{oai}.
+\item The register residuals $L_1\cap t_T^\perp$, $L_{i+1}\cap L_i^\perp$, $L_k^\perp$ (X) and $L_1$,
+  $L_{i+1}\cap L_i^\perp$, $t_S^\perp\cap L_k^\perp$ (Y) are $0$ or contain a vector of odd weight, by
+  (D2) and (D3).
+\end{itemize}
+In every case Lemma~\ref{col:lem:lambda}(iv) gives an ONB.
+
+(d) Along each sequence of Table~\ref{col:tab:paths} the labels increase, except the centres'
+$\colTop\to\colBot$ between steps~6 and~7.
+\end{proof}
+
+\begin{remark}\label{col:rem:edges}
+For banks, centres and side wires, the labels are those of \cite[(2.7)]{oai}, with $D_j$ in place of $D$,
+the row-0 label $\colBot$ and $h$ centres. If the design has no registers, Lemma~\ref{col:lem:edges}
+reduces to \cite[Lemma~2.3]{oai} for this variant. Conditions (D1)--(D3) can equivalently be
+expressed by an explicit ONB of $D_j$ adapted to each register's chain. An X-register satisfies (D1) and (D2) if and only if $D$ has an ONB that contains $t_T$ and in which every
+$L_i$ is spanned by a subset of the basis containing $t_T$. One direction takes the union of ONBs of
+the summands of $D=\langle t_T\rangle\perp(L_1\cap t_T^\perp)\perp(L_2\cap L_1^\perp)\perp\dots\perp L_k^\perp$,
+which exist by (F1) and Lemma~\ref{col:lem:lambda}(iv). Conversely, every residual is then spanned by
+basis vectors. The same holds for Y-registers, with $t_S$ in the basis but outside every $L_i$.
+\end{remark}
+
+%-----------------------------------------------------------------------------------------------------
+\subsection{The network}\label{col:sec:network}
+
+\begin{definition}[colour-register network]\label{col:def:network}
+Let $h_1,h_2,h_3\ge9$ and let $\mathcal R_j$ be a register design for $D_j$ ($j=1,2,3$). The network
+$\mathcal N=\mathcal N(\mathcal R_1,\mathcal R_2,\mathcal R_3)$ has the bank wires $X_d,Y_d$. For every
+stage $j$ and every invocation $o\in\mathcal O_j$ it also has a private copy of the auxiliary wires of
+Section~\ref{col:sec:invocations} for $\mathcal R_j$: $h_j$ centres, $\mathrm{side}(\mathcal R_j)$ side wires and
+$\mathrm{regs}(\mathcal R_j)$ register wires. The stages are run in the order $1,2,3$. Stage $j$ consists of
+the invocations $o\in\mathcal O_j$, with $x_T=X_{(o,T)}$ and $y_S=Y_{(o,S)}$. They are forward
+invocations at stages 1 and 3 and reverse invocations at stage 2, and their labels are formed from the
+stage spaces of $o$. The terminal labels are those of \cite[\S2.3]{oai}. Every source has label $0$,
+except $X_d$, which has label $U_d$. Every sink has label $\colDD$, except $Y_d$, which has label
+$U_d^\perp$.
+\end{definition}
+
+The invocations of one stage act on pairwise disjoint sets of wires. Indeed $X_d$ and $Y_d$ belong
+only to the invocation $o=(d_l)_{l\ne j}$, and the auxiliary wires are private. So the order of the
+invocations within a stage is immaterial.
+
+\begin{proposition}[the network]\label{col:prop:network}
+Let $\mathcal R_1,\mathcal R_2,\mathcal R_3$ be register designs and $\mathcal N=\mathcal N(\mathcal R_1,\mathcal R_2,\mathcal R_3)$.
+\begin{enumerate}
+\item[(a)] For arbitrary initial values on all wires, the three stages map
+  $(X_d,Y_d)\mapsto(-Y_d,X_d)$ for every $d$ and restore every auxiliary wire.
+\item[(b)] Every gate label is nondegenerate, all wires touched by a gate carry its label, and every edge
+  has nested nondegenerate endpoint labels and a residual with an ONB. The only decreasing edges are the
+  centre edges between steps~6 and~7.
+\item[(c)] The number of wires and the saving $\Delta:=Wm-\sum_e\rho_e$ are
+  \[
+    W=2N_0+\sum_{j=1}^3\frac{N_0}{v_j}\big(h_j+\mathrm{side}(\mathcal R_j)+\mathrm{regs}(\mathcal R_j)\big),\qquad
+    \Delta=2N_0-2\sum_{j=1}^3\frac{N_0}{v_j}h_j^2 ,
+  \]
+  where $\rho_e$ runs over the residual dimensions of all edges.
+\item[(d)] The multiset of nonzero residual dimensions is the union over $j$ of $N_0/v_j$ copies of the
+  stage-$j$ multiset of Table~\ref{col:tab:multiset}.
+\end{enumerate}
+Consequently $\mathcal N$ satisfies the network interface (\ref{prop:interface}), since the proof of
+\cite[Proposition~2.4]{oai} applies verbatim. For every $f\ge1$, $\mathcal N$ applies
+$C^{\otimes mf}$ to each of its $W$ arbitrary arrays, and every edge $e$ is one frame change of residual
+dimension $\rho_e$ (Lemma~\ref{lem:batch}).
+\end{proposition}
+
+\begin{table}[ht]\centering\small
+\begin{tabular}{@{}l l l@{}}
+\toprule
+class & wires per invocation & nonzero edge dimensions of each wire\\
+\midrule
+banks & $2v_j$ & $(\alpha-1)(h-1)$,\ $h-1$\\
+centres & $h_j$ & $(\alpha-1)h$,\ $h$,\ $h$,\ $h$,\ $\alpha h(\beta-1)$\\
+side wires & $\mathrm{side}(\mathcal R_j)$ & $(\alpha-1)h$,\ $1$,\ $h-2$,\ $1$,\ $\alpha h(\beta-1)$\\
+X-registers & $|\mathcal X_j|$ & $(\alpha-1)h$,\ $1$,\ $d_1-1$,\ $d_2-d_1,\dots,d_k-d_{k-1}$,\ $h-d_k$,\ $\alpha h(\beta-1)$\\
+Y-registers & $|\mathcal Y_j|$ & $(\alpha-1)h$,\ $d_1$,\ $d_2-d_1,\dots,d_k-d_{k-1}$,\ $h-1-d_k$,\ $1$,\ $\alpha h(\beta-1)$\\
+\bottomrule
+\end{tabular}
+\caption{Edge multiset of one invocation at stage $j$ ($h=h_j$, $\alpha=\alpha_j$, $\beta=\beta_j$; zero
+entries omitted). For a register, $d_1<\dots<d_k$ are the dimensions of its chain labels. The bank edges
+are those entering stage $j$ and those inside it.}\label{col:tab:multiset}
+\end{table}
+
+\begin{proof}
+(a) By Lemmas~\ref{col:lem:scalar} and~\ref{col:lem:reverse}, and because the invocations of a stage act
+on disjoint wires, stage~1 maps $Y_d\mapsto Y_d+X_d$, stage~2 maps $X_d\mapsto X_d-Y_d$, and stage~3
+maps $Y_d\mapsto Y_d+X_d$. Each stage restores every auxiliary wire. Hence
+$(x,y)\mapsto(x,y+x)\mapsto(-y,y+x)\mapsto(-y,x)$, as in \cite[Lemma~2.1]{oai}.
+
+(b) Within an invocation this is Lemma~\ref{col:lem:edges}. Every auxiliary wire lies in exactly one
+invocation, where it runs from its source label $0$ to its sink label $\colDD$. A bank wire passes through
+the three stages. Its source and sink labels are the incoming labels of stage~1 and the outgoing labels
+of stage~3, and the outgoing labels of stage $j$ are the incoming labels of stage $j+1$
+(Section~\ref{col:sec:edges}). So its edges are exactly the bank edges of Lemma~\ref{col:lem:edges} for
+the three stages.
+
+(c) The formula for $W$ counts the wires. For $\Delta$ we follow \cite[proof of Lemma~2.3]{oai}. Along
+every wire, the signed changes of label dimension telescope to (sink dimension) $-$ (source dimension).
+The source dimensions sum to $N_0$ and the sink dimensions to $Wm-N_0$, so the signed sum is
+$Wm-2N_0$. By (b), the only decreases are one edge of dimension $h_j$ on each of the
+$(N_0/v_j)h_j$ centres of stage $j$. Passing to absolute values adds twice these losses:
+$\sum_e\rho_e=Wm-2N_0+2\sum_j(N_0/v_j)h_j^2$.
+
+(d) Read off Table~\ref{col:tab:residuals}, using $\dim B=\alpha-1$, $\dim E=\alpha$ and
+$\dim Q^\perp=\beta-1$. Each bank wire lies in exactly one invocation per stage.
+
+For the consequence: the proof of \cite[Proposition~2.4]{oai} uses three things. The first is the
+complete linear map \cite[(2.6)]{oai}, whose scalar part is the signed bank exchange of (a). The second
+is the label properties of (b), through \cite[Lemma~2.2]{oai}. The third is the terminal labels, through
+the odd weight $\mathrm{wt}(u_d)=27$. All three hold for $\mathcal N$.
+\end{proof}
+
+%-----------------------------------------------------------------------------------------------------
+\subsection{Designs}\label{col:sec:designs}
+
+We construct partial designs for $\Omega^2$ by a structured construction and for $\Omega^0$ from
+searched data. Throughout, $h\ge9$ and $D=\F^h$.
+
+\subsubsection*{Sunflower labels: pairs meeting in two points}
+
+Fix an \emph{axis} $\{a,b\}\subseteq[h]$ and put $Q_{ab}=[h]\setminus\{a,b\}$, so $|Q_{ab}|=n:=h-2$. For
+$x\in Q_{ab}$ let $g_x=e_a+e_b+e_x=t_{\{a,b,x\}}$, and for $P\subseteq Q_{ab}$ let
+$M(P)=\mathrm{span}\{g_x:x\in P\}\subseteq D$.
+
+\begin{lemma}[sunflower labels]\label{col:lem:sunlabels}
+Let $P\subseteq Q_{ab}$.
+\begin{enumerate}
+\item[(a)] $g_x\cdot g_y=\delta_{xy}$. So $\{g_x\}_{x\in P}$ is an ONB of $M(P)$, $M(P)$ is nondegenerate
+  of dimension $|P|$, and for $P\subseteq P'$ the residual of $M(P)\subseteq M(P')$ is $M(P'\setminus P)$.
+\item[(b)] For $x\in P$: $t_{\{a,b,x\}}=g_x\in M(P)$ and $M(P)\cap g_x^\perp=M(P\setminus\{x\})$.
+\item[(c)] If $P\ne Q_{ab}$, then $M(P)^\perp$ contains $e_y$ for every $y\in Q_{ab}\setminus P$.
+\item[(d)] For $c\in Q_{ab}\setminus P$: $t_{\{a,b,c\}}\in M(P)^\perp$, and
+  $t_{\{a,b,c\}}^\perp\cap M(P)^\perp=M(P\cup\{c\})^\perp$. This space contains a vector of odd weight if
+  and only if $P\cup\{c\}\ne Q_{ab}$ or $h$ is even. If $P\cup\{c\}=Q_{ab}$ and $h$ is odd, it is nonzero and has
+  no ONB.
+\end{enumerate}
+\end{lemma}
+
+\begin{proof}
+(a) $g_x\cdot g_y\equiv|\{a,b,x\}\cap\{a,b,y\}|\pmod 2$, which is $3$ or $2$. Orthonormal vectors are
+independent, so they form an ONB of their span; the residual follows from (F1). (b) follows from (a).
+(c) For $x\in P$ we have $e_y\cdot g_x=[y=x]=0$. (d) $g_c\perp M(P)$ by (a), and
+$g_c^\perp\cap M(P)^\perp=(M(P)+\langle g_c\rangle)^\perp=M(P\cup\{c\})^\perp$. If $P\cup\{c\}\ne Q_{ab}$, use
+(c). If $P\cup\{c\}=Q_{ab}$, then $M(Q_{ab})^\perp$ has dimension $h-(h-2)=2$ and contains the
+independent vectors $w_a=e_a+1_{Q_{ab}}$ and $w_b=e_b+1_{Q_{ab}}$. Indeed, for $x\in Q_{ab}$ the only
+nonzero contributions to $w_a\cdot g_x$ are $e_a\cdot e_a=1$ and $1_{Q_{ab}}\cdot e_x=1$, so
+$w_a\cdot g_x=0$, and likewise for $w_b$. So
+$M(Q_{ab})^\perp=\{0,w_a,w_b,e_a+e_b\}$, with weights $h-1$, $h-1$, $2$. It contains an odd vector if and
+only if $h$ is even, and by Lemma~\ref{col:lem:lambda}(iv) it has no ONB for odd $h$.
+\end{proof}
+
+For every axis fix a cyclic order $x_0,\dots,x_{n-1}$ of $Q_{ab}$, with indices in $\mathbb Z/n$. For
+$1\le\ell\le n$ let $U(i,\ell)=\{x_i,x_{i+1},\dots,x_{i+\ell-1}\}$, the arc of length $\ell$ starting at
+$x_i$. Put
+\[
+  \ell_{\max}=n-1\ \text{ if $h$ is even},\qquad \ell_{\max}=n-2\ \text{ if $h$ is odd}.
+\]
+
+\begin{proposition}[cyclic sunflower design]\label{col:prop:sunflower}
+The following data form a partial register design $\mathcal R^{\mathrm{sun}}_h$ for $\Omega^2$. For each axis
+$A=\{a,b\}$ and $i,k\in\mathbb Z/n$:
+\begin{itemize}
+\item an X-register $\xi_{A,i}$ with owner $A\cup\{x_i\}$ and chain
+  \[M(U(i,1))\subsetneq M(U(i,2))\subsetneq\dots\subsetneq M(U(i,\ell_{\max}));\]
+\item a Y-register $\eta_{A,k}$ with owner $A\cup\{x_k\}$ and chain
+  \[M(U(k-1,1))\subsetneq M(U(k-2,2))\subsetneq\dots\subsetneq M(U(k-\ell_{\max},\ell_{\max}));\]
+\item for $i\ne k$ with $\ell:=(k-i)\bmod n\le\ell_{\max}$, a transfer
+  $\tau_{A,i,k}=(M(U(i,\ell)),\xi_{A,i},\eta_{A,k})$;
+\item if $h$ is odd, a side pair $\sigma_{A,k}=(A\cup\{x_{k+1}\},A\cup\{x_k\})$.
+\end{itemize}
+It has $3v$ X-registers, $3v$ Y-registers ($6$ per element), $3v\ell_{\max}$ transfers, and $3v$ side pairs
+if $h$ is odd ($3$ per element), none if $h$ is even. Every chain has dimensions $1,2,\dots,\ell_{\max}$.
+\end{proposition}
+
+\begin{proof}
+The arc $U(i,\ell)$ has $\ell$ elements, and $U(i,\ell+1)=U(i,\ell)\cup\{x_{i+\ell}\}$. The arc
+$U(k-\ell,\ell)=\{x_{k-\ell},\dots,x_{k-1}\}$ does not contain $x_k$ for $\ell\le n-1$, and
+$U(k-\ell-1,\ell+1)=U(k-\ell,\ell)\cup\{x_{k-\ell-1}\}$. Both chains are therefore strictly
+increasing, with dimensions $1,\dots,\ell_{\max}$ by Lemma~\ref{col:lem:sunlabels}(a).
+
+(D1) holds by Lemma~\ref{col:lem:sunlabels}(a).
+
+(D2) Let $T=A\cup\{x_i\}$, so $t_T=g_{x_i}\in M(U(i,1))=\langle g_{x_i}\rangle$. The residuals are
+$M(U(i,1))\cap t_T^\perp=0$ (part (b)); $M(\{x_{i+\ell}\})\ni g_{x_{i+\ell}}$, of weight $3$ (part (a));
+and $M(U(i,\ell_{\max}))^\perp$, which contains some $e_y$ by part (c), since $\ell_{\max}<n$.
+
+(D3) Let $S=A\cup\{x_k\}$, so $t_S=g_{x_k}$. Since $x_k\notin U(k-\ell,\ell)$, every chain label lies in
+$t_S^\perp$ by part (a). The residuals $M(\{x_{k-1}\})$ and $M(\{x_{k-\ell-1}\})$ contain vectors of
+weight $3$. By part (d) with $c=x_k$, the last residual is
+$t_S^\perp\cap M(U(k-\ell_{\max},\ell_{\max}))^\perp=M(U(k-\ell_{\max},\ell_{\max}+1))^\perp$. The arc
+$U(k-\ell_{\max},\ell_{\max}+1)$ equals $Q_{ab}$ exactly when $\ell_{\max}+1=n$, that is, when $h$ is even.
+So part (d) gives an odd vector in both parities.
+
+(D4) If $k\equiv i+\ell$, then $U(i,\ell)=U(k-\ell,\ell)$ is the $\ell$-th label of both chains.
+
+(D5$_{\Omega^2}$) Let $(T,S)\in\Omega^2$. Then $A:=T\cap S$ is the unique axis contained in both, and
+$T=A\cup\{x_i\}$, $S=A\cup\{x_k\}$ with $i\ne k$ uniquely determined. The owner pair of
+$\tau_{A',i',k'}$ is $(A'\cup\{x_{i'}\},A'\cup\{x_{k'}\})$, and that of $\sigma_{A',k'}$ is
+$(A'\cup\{x_{k'+1}\},A'\cup\{x_{k'}\})$. Both have intersection $A'$, so they equal $(T,S)$ only if
+$A'=A$, and then only for $(i',k')=(i,k)$, respectively $k'=k$ and $i=k+1$. With
+$\ell=(k-i)\bmod n\in\{1,\dots,n-1\}$ this gives $n(T,S)=[\ell\le\ell_{\max}]+[h\text{ odd},\ \ell=n-1]$.
+For $h$ even, $\ell_{\max}=n-1$ and there are no side pairs. For $h$ odd, exactly one of $\ell\le n-2$
+and $\ell=n-1$ holds. In both cases $n(T,S)=1$. Every owner pair meets in exactly two points, so pairs
+outside $\Omega^2$ have $n=0$, and side pairs lie in $\Omega$.
+
+Counts: there are $\binom h2$ axes with $n$ registers of each kind. Since $\binom h2(h-2)=3\binom h3$, there
+are $3v$ registers of each kind. Each $i$ has $\ell_{\max}$ partners $k$, and for odd $h$ each $k$ gives one
+side pair.
+\end{proof}
+
+\begin{remark}\label{col:rem:sunflower}
+For odd $h$ the choice $\ell_{\max}=n-1$ would violate (D3). The last residual of the reader would be
+$M(Q_{ab})^\perp$, which has no ONB by Lemma~\ref{col:lem:sunlabels}(d). The side pairs
+$\sigma_{A,k}$ replace exactly those transfers.
+\end{remark}
+
+\subsubsection*{Coordinate labels: disjoint pairs}
+
+For $A\subseteq[h]$ let $\F^A=\mathrm{span}\{e_i:i\in A\}\subseteq D$, and write $A^c=[h]\setminus A$.
+
+\begin{lemma}[coordinate labels and chains]\label{col:lem:coord}
+\begin{enumerate}
+\item[(a)] $\F^A$ is nondegenerate with ONB $\{e_i\}_{i\in A}$, $(\F^A)^\perp=\F^{A^c}$, and for $A\subseteq A'$
+  the residual of $\F^A\subseteq\F^{A'}$ is $\F^{A'\setminus A}$.
+\item[(b)] An X-register with owner $T$ and chain $\F^{A_1}\subsetneq\dots\subsetneq\F^{A_k}$ satisfies (D1)
+  and (D2) if $T\subseteq A_1$ and $|A_1|\ge4$.
+\item[(c)] A Y-register with owner $S$ and chain $\F^{A_1}\subsetneq\dots\subsetneq\F^{A_k}$ satisfies (D1)
+  and (D3) if $S\cap A_k=\emptyset$ and $|A_k|\le h-4$.
+\item[(d)] Suppose $\F^{A}$ lies in the chain of an X-register as in (b), with owner $T$, and in the chain
+  of a Y-register as in (c), with owner $S$. Then $T\cap S=\emptyset$; in particular $(T,S)\in\Omega^0$.
+\end{enumerate}
+\end{lemma}
+
+\begin{proof}
+(a) is clear.
+(b) $t_T\in\F^{A_1}$ since $T\subseteq A_1$. The residual $\F^{A_1}\cap t_T^\perp$ contains $e_i$ for
+$i\in A_1\setminus T$, which exists since $|A_1|>3$. The residual $\F^{A_{i+1}\setminus A_i}$ is
+nonzero and contains a coordinate unit. Finally $(\F^{A_k})^\perp=\F^{A_k^c}$ is $0$ or contains a
+coordinate unit.
+(c) $\F^{A_k}\perp t_S$ since the supports are disjoint. The residuals $\F^{A_1}$ and
+$\F^{A_{i+1}\setminus A_i}$ are $0$ or contain a coordinate unit. The last residual
+$t_S^\perp\cap\F^{A_k^c}$ contains $e_x$ for $x\in A_k^c\setminus S$, which exists since $|A_k^c|\ge4>|S|$.
+(d) Let $A_1$ be the first set of the X-chain and $A'$ the last set of the Y-chain. Then
+$T\subseteq A_1\subseteq A\subseteq A'$ and $S\cap A'=\emptyset$, so $T\cap S=\emptyset$.
+\end{proof}
+
+The bounds are sharp. If $|A_1|=3$ then $A_1=T$, and $\F^T\cap t_T^\perp$ consists of the even-weight
+vectors of $\F^T$, which has no ONB. The case $|A_k|=h-3$ is symmetric. A coordinate label $\F^A$ can
+serve every writer $T\subseteq A$ and every reader $S\subseteq A^c$.
+
+\begin{definition}[prefix-chain coordinate design]\label{col:def:prefix}
+A \emph{prefix-chain coordinate design} for $D=\F^h$ is given by a list of groups $g=1,\dots,\Gamma$.
+Group $g$ consists of the following data.
+\begin{itemize}
+\item A chain of sets $A_{g,1}\subsetneq\dots\subsetneq A_{g,k_g}\subseteq[h]$ with $4\le|A_{g,i}|\le h-4$ and
+  $k_g\le9$.
+\item \emph{Writer entries} $(T,g,i)$ with $T\subseteq A_{g,i}$.
+\item \emph{Reader entries} $(S,g,I)$ with $\emptyset\ne I\subseteq\{1,\dots,k_g\}$ and
+  $S\cap A_{g,\max I}=\emptyset$.
+\end{itemize}
+Its register design $\mathcal R^{\mathrm{coord}}$ has the following parts.
+\begin{itemize}
+\item An X-register for each writer entry, with owner $T$ and chain $(\F^{A_{g,i}})$, a single label.
+\item A Y-register for each reader entry, with owner $S$ and chain $(\F^{A_{g,i}})_{i\in I}$ in increasing
+  order.
+\item Candidates $(\F^{A_{g,i}},\,(T,g,i),\,(S,g,I))$, one for each writer entry and each reader entry of
+  the same group with $i\in I$. They are ordered lexicographically by $(g,i)$, with ties broken by a fixed
+  order of the entries.
+\item Transfers and side pairs given by first cover relative to $\Omega^0$
+  (Lemma~\ref{col:lem:firstcover}).
+\end{itemize}
+In the designs below, $A_{g,i}=\pi_g(\{1,\dots,s_g+i-1\})$ for a permutation $\pi_g$ of $[h]$ and an offset
+$s_g$. The sets are prefixes of a permutation, which explains the name. This structure is not used in
+the proofs.
+\end{definition}
+
+\begin{lemma}\label{col:lem:prefix}
+$\mathcal R^{\mathrm{coord}}$ is a partial register design for $\Omega^0$. Its X-registers have one label, its
+Y-registers have at most $9$ labels, and
+$\mathrm{side}(\mathcal R^{\mathrm{coord}})=|\Omega^0|-\#\{\text{covered pairs}\}$.
+\end{lemma}
+
+\begin{proof}
+Lemma~\ref{col:lem:coord}(b) and (c) give (D1)--(D3), using $A_{g,i}\subseteq A_{g,\max I}$ for $i\in I$.
+Lemma~\ref{col:lem:coord}(d) shows that every candidate's owner pair lies in $\Omega^0$. Now apply
+Lemma~\ref{col:lem:firstcover}.
+\end{proof}
+
+\begin{proposition}[the three searched designs; computational verification]\label{col:prop:designs}
+For $h\in\{30,20,41\}$ let $\mathcal R^{\mathrm{coord}}_h$ be the prefix-chain coordinate design given by the
+searched data of Remark~\ref{col:rem:designs}. Let $\mathcal R_h=\mathcal R^{\mathrm{coord}}_h\sqcup\mathcal R^{\mathrm{sun}}_h$.
+\begin{enumerate}
+\item[(a)] The data satisfy the conditions of Definition~\ref{col:def:prefix}. The label sizes lie in
+  $[11,19]$, $[6,14]$ and $[16,24]$ respectively, and the longest Y-chains have $9$, $8$ and $9$ labels.
+\item[(b)] The numbers of writer entries, reader entries and uncovered disjoint pairs are as in
+  Table~\ref{col:tab:designs}.
+\item[(c)] $\mathcal R_h$ is a register design, satisfying (D1)--(D5), with the counts of
+  Table~\ref{col:tab:designs}.
+\end{enumerate}
+Parts (a) and (b) are established by exhaustive computation, not by a proof by hand; see
+Remark~\ref{col:rem:designs} for their formal verification. Part (c) follows
+from (a), (b), Lemma~\ref{col:lem:prefix}, Proposition~\ref{col:prop:sunflower} and
+Lemma~\ref{col:lem:union}.
+\end{proposition}
+
+\begin{table}[ht]\centering\small
+\begin{tabular}{@{}l r r r@{}}
+\toprule
+ & $h=30$ (stage 1) & $h=20$ (stage 2) & $h=41$ (stage 3)\\
+\midrule
+$v=\binom h3$ & $4060$ & $1140$ & $10\,660$\\
+invocations $N_0/v$ & $12\,152\,400$ & $43\,279\,600$ & $4\,628\,400$\\
+ordered orthogonal pairs $|\Omega|$ & $12\,204\,360$ & $833\,340$ & $91\,143\,000$\\
+\quad covered by coordinate transfers & $11\,860\,737$ & $772\,124$ & $89\,880\,593$\\
+\quad covered by sunflower transfers $3v\ell_{\max}$ & $328\,860$ & $58\,140$ & $1\,183\,260$\\
+\quad side pairs (coordinate + sunflower) & $14\,763+0$ & $3\,076+0$ & $47\,167+31\,980$\\
+coordinate X-registers (writer entries) & $96\,881$ & $18\,090$ & $304\,414$\\
+coordinate Y-registers (reader entries) & $94\,429$ & $17\,552$ & $330\,907$\\
+sunflower registers $6v$ & $24\,360$ & $6\,840$ & $63\,960$\\
+$\mathrm{regs}(\mathcal R_h)$ & $215\,670$ & $42\,482$ & $699\,281$\\
+$\mathrm{side}(\mathcal R_h)$ & $14\,763$ & $3\,076$ & $79\,147$\\
+auxiliary wires per invocation $h+\mathrm{side}+\mathrm{regs}$ & $230\,463$ & $45\,578$ & $778\,469$\\
+per bank element $(\mathrm{side}+\mathrm{regs})/v$ & $56.8$ & $40.0$ & $73.0$\\
+OpenAI's $d=\binom{h-3}3+3(h-3)$ & $3006$ & $731$ & $8550$\\
+\bottomrule
+\end{tabular}
+\caption{The designs $\mathcal R_{30}$, $\mathcal R_{20}$, $\mathcal R_{41}$.}\label{col:tab:designs}
+\end{table}
+
+\begin{remark}[how Proposition~\ref{col:prop:designs} was verified]\label{col:rem:designs}
+The designs were found by a heuristic search, which has no proof value. They were then checked
+exhaustively, in exact integer arithmetic, by three independently written programs. Each program
+checks the
+conditions of (a) for every group and entry. It also checks that each of the $12\,204\,360$,
+$833\,340$ and $91\,143\,000$ ordered orthogonal pairs is covered exactly once, by one transfer or by
+one pair of the explicit side-pair list stored with the design. Equivalently, the stored list is the
+set of uncovered pairs, and its length is the count in (b). The three programs agree on all counts in
+Table~\ref{col:tab:designs}.
+
+In the formal verification (Section~\ref{sec:formal}) the same group data define partial register
+designs for $\Omega^0$, with first-cover semantics, and their validity is checked by the Lean kernel
+itself. The count bounds are proved there: at most $304\,414$ X-registers, $330\,907$ Y-registers and
+$47\,167$ side pairs at $h=41$, and likewise at $h=30,20$ with the numbers of
+Table~\ref{col:tab:designs}. In the formal version each Y-register follows the maximal chain of its
+group (every label of the group disjoint from its owner). Its edge multiset may therefore differ from
+that of the searched data. It still satisfies the counts and the chain-length bounds used in
+Proposition~\ref{col:prop:exponent}(d).
+\end{remark}
+
+%-----------------------------------------------------------------------------------------------------
+\subsection{The exponent}\label{col:sec:exponent}
+
+Let $\mathcal N=\mathcal N(\mathcal R_{30},\mathcal R_{20},\mathcal R_{41})$ for the stage order $(h_1,h_2,h_3)=(30,20,41)$. Then
+$m=24\,600$, $N_0=49\,338\,744\,000$, and the stage parameters are as follows:
+\begin{center}\small
+\begin{tabular}{@{}c c c c c c@{}}
+\toprule
+stage $j$ & $h_j$ & $(\alpha_j,\beta_j)$ & $(\alpha_j-1)h_j$ & $\alpha_jh_j(\beta_j-1)$ & bank edges\\
+\midrule
+1 & 30 & $(1,820)$ & $0$ & $24\,570$ & $0$, $29$\\
+2 & 20 & $(30,41)$ & $580$ & $24\,000$ & $551$, $19$\\
+3 & 41 & $(600,1)$ & $24\,559$ & $0$ & $23\,960$, $40$\\
+\bottomrule
+\end{tabular}
+\end{center}
+Let $W^*=2^{43}$. The \emph{padded network} $\mathcal N^*$ adds $W^*-W$ padding roles. Each has the label
+path $0\to\langle e\rangle\to\colDD$, for a coordinate vector $e$ of $\colDD$, is touched by no gate, and
+has edges of dimension $1$ and $m-1$, with residual ONBs $\{e\}$ and the other coordinate vectors. Its
+frame ratio is $\Phi_{\colDD}\Phi_0^{-1}=C^{\otimes m}$ \cite[\S2.2]{oai}. Let $\mathcal E$ be the multiset of
+nonzero residual dimensions of all edges of $\mathcal N^*$, and
+\[
+  \Phi(z)=\sum_{\rho\in\mathcal E}\Big(\frac{\rho}{m}\Big)^{z}.
+\]
+
+\begin{proposition}[exponent certificate]\label{col:prop:exponent}
+For the padded network $\mathcal N^*$:
+\begin{enumerate}
+\item[(a)] $W=8\,475\,019\,577\,600\le 2^{43}=8\,796\,093\,022\,208$, so there are $321\,073\,444\,608$
+  padding roles. Moreover $\Delta=26\,618\,807\,200$, and $W^*m-\sum_{\rho\in\mathcal E}\rho=\Delta>0$.
+\item[(b)] $1\le\rho\le m-1$ for every $\rho\in\mathcal E$, and $|\mathcal E|\ge2W^*$.
+\item[(c)] $\Phi(1-\varepsilon_1)\le2^{43}$ for $\varepsilon_1=3.279039\cdot10^{-6}$ (exact edge multiset).
+\item[(d)] $\Phi(1-\varepsilon_2)\le2^{43}$ for $\varepsilon_2=3.221860\cdot10^{-6}$, by an argument that uses
+  only the counts of Table~\ref{col:tab:designs} and the chain lengths of Lemma~\ref{col:lem:prefix}.
+\item[(e)] $\Phi(z)<2^{43}$ for $z=1-3.21\cdot10^{-6}$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+(a) Substitute Table~\ref{col:tab:designs} into Proposition~\ref{col:prop:network}(c). Each padding role
+contributes $1+(m-1)=m$ to $\sum\rho$, so $W^*m-\sum_{\rho\in\mathcal E}\rho=Wm-\sum_e\rho_e=\Delta$.
+
+(b) By Table~\ref{col:tab:multiset} and the stage table above, the fixed sizes are at most $24\,570$, the
+register middle edges at most $h_j-1$, and the padding edges $1$ and $m-1=24\,599$. Every role has at
+least two nonzero edges. A bank wire has at least the stage-1 edge $29$ and the stage-2 edges $551$ and
+$19$. A centre has three edges $h$. A side wire has two unit edges. An X-register has the unit edge
+$\colBot\to\colXb$ and middle edges summing to $h-1$. A Y-register has the unit edge $\colYt\to\colTop$
+and middle edges summing to $h-1$. A padding role has $1$ and $m-1$.
+
+(c) Lemma~\ref{lem:certificate} bounds each term $(\rho/m)^{1-\varepsilon}$ by a rational number computed
+from a rational upper bound for $\ln(m/\rho)$. The resulting bound for $\Phi(1-\varepsilon_1)$, evaluated in
+exact rational arithmetic over the exact multiset $\mathcal E$ (38 distinct values of $\rho$, with the
+chain dimensions of every register of $\mathcal R_h$), is at most $2^{43}$. This is a computation,
+which re-runs the design checks of Remark~\ref{col:rem:designs} before evaluating the bound. In an
+independent recomputation of the multiset, the root of $\Phi(p)=2^{43}$ was found to be $1-p=3.2791253\cdot10^{-6}\ge\varepsilon_1$.
+
+(d) Put $\varphi(c)=(c/m)^z$ for $c\ge0$, with $0<z\le1$. Since $c\mapsto c^z$ is concave and increasing,
+Jensen's inequality gives $\sum_{i=1}^{n}\varphi(c_i)\le n\,\varphi(S/n)$ whenever $c_i\ge0$ and $\sum c_i\le S$
+(tangent bound). For integers $c\ge1$ also $\varphi(c)\le c\,\varphi(1)$ (crude bound). The \emph{middle
+edges} of an X-register are its edges from the step-4 touch at $\colXb(t_T)$ to the step-10 touch at
+$\colTop$. The middle edges of a Y-register are its edges from the step-3 touch at $\colBot$ to the
+step-8 touch at $\colYt(t_S)$. A register with $k$ chain labels has $k+1$ middle edges, and by
+Table~\ref{col:tab:residuals} their dimensions sum to $h-1$. Its other nonzero edges are
+$(\alpha-1)h$, one unit edge and $\alpha h(\beta-1)$. By Lemma~\ref{col:lem:prefix}, a coordinate
+X-register has $2$ middle edges and a coordinate Y-register at most $10$. Bounding
+the coordinate registers by the tangent bound and the sunflower registers by the crude bound gives,
+with $a=\alpha_j$, $b=\beta_j$ and $h=h_j$ at stage $j$,
+\begin{align*}
+  \Phi(z)\le{}&\sum_{j=1}^3\frac{N_0}{v_j}\Big[\,2v_j\,\varphi_{\mathrm{bk}}+h_j\,\varphi_{\mathrm{c}}
+   +\mathrm{side}_j\,\varphi_{\mathrm{sd}}+X_j\,\varphi_{X}+Y_j\,\varphi_{Y}+6v_j\,\varphi_{\mathrm{sun}}\Big]\\
+   &+(W^*-W)\big(\varphi(1)+\varphi(m-1)\big),\\
+  \varphi_{\mathrm{bk}}={}&\varphi((a-1)(h-1))+\varphi(h-1),\qquad
+  \varphi_{\mathrm{c}}=\varphi((a-1)h)+3\varphi(h)+\varphi(ah(b-1)),\\
+  \varphi_{\mathrm{sd}}={}&\varphi((a-1)h)+2\varphi(1)+\varphi(h-2)+\varphi(ah(b-1)),\\
+  \varphi_{X}={}&\varphi((a-1)h)+\varphi(1)+2\varphi(\tfrac{h-1}{2})+\varphi(ah(b-1)),\\
+  \varphi_{Y}={}&\varphi((a-1)h)+\varphi(1)+10\,\varphi(\tfrac{h-1}{10})+\varphi(ah(b-1)),\\
+  \varphi_{\mathrm{sun}}={}&\varphi((a-1)h)+h\,\varphi(1)+\varphi(ah(b-1)),
+\end{align*}
+where $\varphi(0)=0$, and $X_j$, $Y_j$, $\mathrm{side}_j$ are the coordinate X-registers, coordinate
+Y-registers and side wires of Table~\ref{col:tab:designs}. Each $\varphi$-value at $z=1-\varepsilon_2$ is
+bounded by Lemma~\ref{lem:certificate} with rational logarithm bounds, $22$ distinct arguments in all.
+The resulting rational number is at most $2^{43}$ (exact arithmetic).
+
+(e) Each term of $\Phi$ is strictly decreasing in $z$, since $0<\rho/m<1$. As
+$1-3.21\cdot10^{-6}>1-\varepsilon_2$, part (e) follows from (d), and also from (c). The rational inequality
+obtained directly from the bound of (d) at $z=1-3.21\cdot10^{-6}$ is part of the formal verification
+(Section~\ref{sec:formal}).
+\end{proof}
+
+\begin{remark}\label{col:rem:exponent}
+The argument of part (d) uses only the counts of Table~\ref{col:tab:designs} and the chain-length
+bounds. It therefore applies to any designs whose per-factor counts and chain lengths are dominated by
+these, and gives for them $W\le2^{43}$, $1\le\rho_e\le m-1$ for every edge, and
+$\sum_e(\rho_e/m)^z<2^{43}$ at $z=1-3.21\cdot10^{-6}$.
+
+For comparison, the per-direction rule of \cite[Theorem~2.6]{oai}, with the same packing into $2^{43}$
+roles, gives only $1-\theta\approx\Delta/(W^*m\ln m)\approx1.2167\cdot10^{-8}$ for this network. Almost
+all of $\sum\rho$ lies in edges with $\rho$ close to $m$, which the grouped recursion charges nearly
+nothing.
+\end{remark}
+
+%-----------------------------------------------------------------------------------------------------
+\subsection{The colour-register theorem}\label{col:sec:main}
+
+\begin{theorem}[colour-register network]\label{col:thm:main}
+Let $(h_1,h_2,h_3)=(30,20,41)$, let $\mathcal R_{30}$, $\mathcal R_{20}$, $\mathcal R_{41}$ be the register designs
+of Proposition~\ref{col:prop:designs}, and let $\mathcal N^*$ be the network
+$\mathcal N(\mathcal R_{30},\mathcal R_{20},\mathcal R_{41})$ padded to $W^*=2^{43}$ roles. Then $\mathcal N^*$ satisfies the
+hypotheses of Theorem~\ref{thm:grouped} with $W^*=2^{43}$ and $m=24\,600$:
+\begin{enumerate}
+\item[(i)] $\mathcal N^*$ is a network on $W^*$ roles that satisfies the network interface
+  (\ref{prop:interface}). For arbitrary contents of all roles and every $f\ge1$, it applies
+  $C^{\otimes mf}$ to every role.
+\item[(ii)] Every edge has nested nondegenerate endpoint labels, a residual with an ONB, and residual
+  dimension $1\le\rho_e\le m-1$.
+\item[(iii)] $\displaystyle\sum_e\Big(\frac{\rho_e}{m}\Big)^{z}<2^{43}$ for $z=1-3.21\cdot10^{-6}$.
+\end{enumerate}
+The network has $W=8\,475\,019\,577\,600$ non-padding roles and saving $\Delta=26\,618\,807\,200$.
+Inequality (iii) also holds with $z=1-3.279039\cdot10^{-6}$, as $\le$. Consequently,
+Theorem~\ref{thm:grouped} applies to $\mathcal N^*$ with exponent $z=1-3.21\cdot10^{-6}$.
+\end{theorem}
+
+\begin{proof}
+By Proposition~\ref{col:prop:designs}, each $\mathcal R_h$ is a register design. Part (i) is
+Proposition~\ref{col:prop:network} for $\mathcal N$. The padding roles are touched by no gate, and their frame
+ratio is $C^{\otimes m}$. Part (ii) is Proposition~\ref{col:prop:network}(b) together with
+Proposition~\ref{col:prop:exponent}(b) and the description of the padding roles. Part (iii) and the
+remaining numbers are Proposition~\ref{col:prop:exponent}(a), (c) and (e).
+\end{proof}
+
+\begin{remark}[status of the proof]\label{col:rem:status}
+The proof of Theorem~\ref{col:thm:main} has two kinds of input.
+\begin{enumerate}
+\item[(1)] \emph{Written proofs} in this section, for general parameters:
+  Lemmas~\ref{col:lem:centres}, \ref{col:lem:lambda}, \ref{col:lem:union}, \ref{col:lem:firstcover},
+  \ref{col:lem:scalar}, \ref{col:lem:reverse}, \ref{col:lem:edges}, \ref{col:lem:sunlabels},
+  \ref{col:lem:coord}, \ref{col:lem:prefix} and Propositions~\ref{col:prop:network},
+  \ref{col:prop:sunflower}. They rely on \cite[\S2]{oai} (Lemmas 2.1--2.3, Proposition~2.4 and the
+  splitting statement at the end of \S2.3), on standard facts about symmetric bilinear forms over $\F$,
+  and on Lemmas~\ref{lem:batch} and~\ref{lem:certificate}.
+\item[(2)] \emph{Exhaustive computation} on the three searched coordinate designs
+  (Proposition~\ref{col:prop:designs}(a),(b)), done by independent programs, and the exact rational
+  evaluation of the certificate bounds (Proposition~\ref{col:prop:exponent}(c),(d)).
+\end{enumerate}
+In addition, Theorem~\ref{col:thm:main}, and with it Theorem~\ref{thm:main}, has been formally
+verified (Section~\ref{sec:formal}). The formal proof covers the network for arbitrary register
+designs, the three factor designs, whose data are checked by the Lean kernel, and the exponent
+inequality in the form of Proposition~\ref{col:prop:exponent}(d) at $z=1-3.21\cdot10^{-6}$.
+\end{remark}

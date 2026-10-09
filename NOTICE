@@ -1,0 +1,17 @@
+This repository contains a modified copy of OpenAI's Lean formalization of
+"An explicit power saving for the exact discrete Fourier transform"
+(https://github.com/openai/math, directory lean/), licensed under the Apache License 2.0
+(see lean/LICENSE-OpenAI-Apache-2.0).
+
+Modifications to OpenAI's files (full diff in lean/OPENAI_CHANGES.diff):
+  - lean/OAI/Computability/FourierTransform/TensorSaving.lean
+  - lean/OAI/Computability/FourierTransform/TensorProgram.lean
+  - lean/OAI/Computability/FourierTransform/Main.lean
+Each modified declaration is marked "MODIFIED" in a comment.
+
+Added (new work, also under the Apache License 2.0):
+  - lean/OAI/Computability/FourierTransform/Grouped/
+  - lean/OAI/Computability/FourierTransform/Colour/
+  - lean/Check.lean
+  - paper/
+All other files under lean/ are OpenAI's, unchanged.
